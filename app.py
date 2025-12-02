@@ -7,15 +7,20 @@ from flask import Flask, render_template, request, jsonify
 from apscheduler.schedulers.background import BackgroundScheduler
 import edge_tts
 
-# --- CONFIGURATION ---
+# --- WINDOWS/LINUX FIX ---
+if sys.platform == 'win32':
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 app = Flask(__name__)
+
+# Config
 AUDIO_DIR = os.path.join("static", "audio")
 os.makedirs(AUDIO_DIR, exist_ok=True)
-MAX_CHARS = 5000 
+MAX_CHARS = 10000 
 
 # --- VOICE MAP ---
 VOICE_MAP = {
-    # Local Languages
+    # Original Scripts
     'ur': {'Male': 'ur-PK-SalmanNeural', 'Female': 'ur-PK-UzmaNeural'},
     'hi': {'Male': 'hi-IN-MadhurNeural', 'Female': 'hi-IN-SwaraNeural'},
     
@@ -44,7 +49,7 @@ def cleanup_files():
     for f in os.listdir(AUDIO_DIR):
         f_path = os.path.join(AUDIO_DIR, f)
         if os.path.isfile(f_path):
-            if now - os.path.getmtime(f_path) > 600: # 10 Minutes
+            if now - os.path.getmtime(f_path) > 600: # 10 Mins
                 try: os.remove(f_path)
                 except: pass
 
@@ -58,9 +63,22 @@ async def generate_audio(text, voice, pitch, rate, filename):
     communicate = edge_tts.Communicate(processed_text, voice, pitch=pitch, rate=rate)
     await communicate.save(os.path.join(AUDIO_DIR, filename))
 
+# --- ROUTES ---
 @app.route('/')
 def home():
     return render_template('index.html')
+
+@app.route('/about')
+def about():
+    return render_template('about.html')
+
+@app.route('/privacy')
+def privacy():
+    return render_template('privacy.html')
+
+@app.route('/terms')
+def terms():
+    return render_template('terms.html')
 
 @app.route('/generate', methods=['POST'])
 def generate():
@@ -82,20 +100,17 @@ def generate():
         else:
             selected_voice = lang_config.get(gender, lang_config['Male'])
 
-        # Parameters
+        # Params
         pitch_str = f"{'+' if pitch_val >= 0 else ''}{pitch_val}Hz"
         rate_str = f"{'+' if speed_val >= 0 else ''}{speed_val}%"
         filename = f"audio_{lang_code}_{str(uuid.uuid4())[:8]}.mp3"
 
-        # Execution Logic (Cross-Platform)
-        if sys.platform == 'win32':
-            asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-            asyncio.run(generate_audio(text, selected_voice, pitch_str, rate_str, filename))
-        else:
-            # Linux/Render ke liye
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
+        # Execution
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
             loop.run_until_complete(generate_audio(text, selected_voice, pitch_str, rate_str, filename))
+        finally:
             loop.close()
 
         return jsonify({
@@ -109,5 +124,4 @@ def generate():
         return jsonify({'error': 'Server Busy. Try again.'}), 500
 
 if __name__ == '__main__':
-    # Render Gunicorn use karega, lekin local testing k liye ye theek hai
     app.run(debug=True)
