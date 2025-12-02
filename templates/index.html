@@ -1,142 +1,221 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ProVoice AI - Ultimate TTS Tool</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="stylesheet" href="/static/css/style.css">
-</head>
-<body>
+{% extends "base.html" %}
 
-    <nav class="navbar navbar-dark bg-dark shadow-sm">
-        <div class="container">
-            <a class="navbar-brand fw-bold text-warning" href="#">
-                <i class="fa-solid fa-microphone-lines me-2"></i>ProVoice AI
-            </a>
-        </div>
-    </nav>
+{% block content %}
+<!-- HERO SECTION & TOOL -->
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            
+            <!-- TOOL CARD -->
+            <div class="card shadow-lg border-0 rounded-4 mb-5">
+                <div class="card-header bg-white border-0 pt-4 pb-0 text-center">
+                    <span class="badge bg-warning text-dark mb-2 px-3 rounded-pill">V2.0 - New Features</span>
+                    <h1 class="h2 fw-bold text-dark">Free Text to Speech Converter</h1>
+                    <p class="text-muted">Turn your text into lifelike AI audio in Urdu, Hindi & English.</p>
+                </div>
 
-    <div class="container mt-4 mb-5">
-        <div class="row justify-content-center">
-            <div class="col-lg-8">
-                
-                <div class="card shadow-lg border-0 rounded-4">
-                    <div class="card-header bg-white border-0 pt-4 pb-0 text-center">
-                        <h3 class="fw-bold text-dark">Text to Audio Generator</h3>
-                        <p class="text-muted small">Select language, adjust pitch, and create magic.</p>
+                <div class="card-body p-4">
+                    <!-- Tool Controls -->
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <label class="fw-semibold text-secondary">Input Script</label>
+                        <button id="addPauseBtn" class="btn btn-sm btn-outline-primary rounded-pill">
+                            <i class="fa-solid fa-pause me-1"></i> Add Pause
+                        </button>
                     </div>
 
-                    <div class="card-body p-4">
-                        
-                        <!-- Toolbar -->
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <label class="fw-semibold text-secondary">Your Script</label>
-                            <button id="addPauseBtn" class="btn btn-sm btn-outline-primary rounded-pill" title="Adds a 1-second pause">
-                                <i class="fa-solid fa-pause me-1"></i> Insert Pause
-                            </button>
+                    <div class="position-relative">
+                        <textarea id="textInput" class="form-control bg-light fs-5" rows="6" placeholder="Type here... (e.g. السلام علیکم or Hello World)"></textarea>
+                        <div class="text-end mt-1">
+                            <span id="charCount" class="badge bg-secondary opacity-50">0 / 10000</span>
                         </div>
+                    </div>
 
-                        <!-- Text Area -->
-                        <div class="position-relative">
-                            <textarea id="textInput" class="form-control bg-light fs-5" rows="6" placeholder="Type here... (Roman Urdu, Hindi, English etc.)"></textarea>
-                            <!-- Character Counter -->
-                            <div class="text-end mt-1">
-                                <span id="charCount" class="badge bg-secondary opacity-50">0 / 5000</span>
-                            </div>
+                    <!-- Settings Grid -->
+                    <div class="row g-3 mt-2">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small text-uppercase">Language</label>
+                            <select id="languageSelect" class="form-select border-2">
+                                <optgroup label="📜 Local Languages">
+                                    <option value="ur">Urdu (اردو Script)</option>
+                                    <option value="hi">Hindi (हिंदी Script)</option>
+                                </optgroup>
+                                <optgroup label="🇺🇸 🇬🇧 English">
+                                    <option value="en-us" selected>English (USA)</option>
+                                    <option value="en-uk">English (UK)</option>
+                                    <option value="en-in">English (Indian)</option>
+                                </optgroup>
+                                <optgroup label="🎭 Fun Voices">
+                                    <option value="story">🧙‍♂️ Storyteller</option>
+                                    <option value="horror">👻 Horror</option>
+                                    <option value="cartoon">🐿️ Cartoon</option>
+                                    <option value="news">📰 News Anchor</option>
+                                </optgroup>
+                                <optgroup label="🌍 Other">
+                                    <option value="ar">Arabic</option>
+                                    <option value="es">Spanish</option>
+                                    <option value="fr">French</option>
+                                </optgroup>
+                            </select>
                         </div>
-
-                        <!-- Settings Grid -->
-                        <div class="row g-3 mt-2">
-                            
-                           <!-- Language Dropdown (Simplified) -->
-<div class="col-md-6">
-    <label class="form-label fw-bold small text-uppercase">Select Language</label>
-    <select id="languageSelect" class="form-select border-2">
-        <optgroup label="📜 Local Languages (Use Proper Script)">
-            <option value="ur">Urdu (اردو)</option>
-            <option value="hi">Hindi (हिंदी)</option>
-        </optgroup>
-        <optgroup label="🇺🇸 🇬🇧 English Options">
-            <option value="en-us" selected>English (American)</option>
-            <option value="en-uk">English (British)</option>
-            <option value="en-in">English (Indian Accent)</option>
-        </optgroup>
-        <optgroup label="🎭 Special Voices (Fun Mode)">
-            <option value="story">🧙‍♂️ The Storyteller (Deep)</option>
-            <option value="horror">👻 Horror / Scary</option>
-            <option value="cartoon">🐿️ Cartoon / Chipmunk</option>
-            <option value="news">📰 News Anchor</option>
-        </optgroup>
-        <optgroup label="🌍 Global Languages">
-            <option value="ar">Arabic (العربية)</option>
-            <option value="es">Spanish (Español)</option>
-            <option value="fr">French (Français)</option>
-        </optgroup>
-    </select>
-    <small class="text-muted" style="font-size: 0.7rem;">
-        * For Urdu, please paste Urdu text (e.g. السلام علیکم). 
-        * For Special Voices, use English text.
-    </small>
-</div>
-
-                            <!-- Gender Selection -->
-                            <div class="col-md-6">
-                                <label class="form-label fw-bold small text-uppercase">Voice Gender</label>
-                                <select id="genderSelect" class="form-select border-2">
-                                    <option value="Male">Male (Man)</option>
-                                    <option value="Female">Female (Woman)</option>
-                                </select>
-                                <small id="genderNote" class="text-muted" style="font-size: 0.75rem; display:none;">*Preset locked for special voice</small>
-                            </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small text-uppercase">Gender</label>
+                            <select id="genderSelect" class="form-select border-2">
+                                <option value="Male">Male</option>
+                                <option value="Female">Female</option>
+                            </select>
+                            <small id="genderNote" class="text-danger small" style="display:none;">*Locked for special voice</small>
                         </div>
+                    </div>
 
-                        <!-- Sliders -->
-                        <div class="row g-3 mt-3 p-3 bg-light rounded-3 mx-0">
-                            <div class="col-md-6">
-                                <label class="form-label small fw-bold">Pitch (Tone): <span id="pitchValue" class="text-primary">0</span>Hz</label>
-                                <input type="range" class="form-range" id="pitchRange" min="-50" max="50" value="0">
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label small fw-bold">Speed: <span id="speedValue" class="text-primary">0</span>%</label>
-                                <input type="range" class="form-range" id="speedRange" min="-50" max="50" value="0">
-                            </div>
+                    <!-- Sliders -->
+                    <div class="row g-3 mt-3 p-3 bg-light rounded-3 mx-0">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Pitch: <span id="pitchValue" class="text-primary">0</span>Hz</label>
+                            <input type="range" class="form-range" id="pitchRange" min="-50" max="50" value="0">
                         </div>
-
-                        <!-- Generate Button -->
-                        <div class="d-grid mt-4">
-                            <button id="generateBtn" class="btn btn-warning btn-lg fw-bold text-dark shadow-sm">
-                                <i class="fa-solid fa-bolt me-2"></i> Generate Audio
-                            </button>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Speed: <span id="speedValue" class="text-primary">0</span>%</label>
+                            <input type="range" class="form-range" id="speedRange" min="-50" max="50" value="0">
                         </div>
+                    </div>
 
-                        <!-- Loader -->
-                        <div id="loading" class="text-center mt-4 d-none">
-                            <div class="spinner-grow text-warning" role="status"></div>
-                            <p class="mt-2 text-muted animate-pulse">Processing your audio...</p>
+                    <!-- Button -->
+                    <div class="d-grid mt-4">
+                        <button id="generateBtn" class="btn btn-warning btn-lg fw-bold text-dark shadow-sm">
+                            <i class="fa-solid fa-bolt me-2"></i> Generate Audio
+                        </button>
+                    </div>
+
+                    <!-- Loading & Result -->
+                    <div id="loading" class="text-center mt-4 d-none">
+                        <div class="spinner-grow text-warning" role="status"></div>
+                        <p class="mt-2 text-muted">Converting text to neural speech...</p>
+                    </div>
+
+                    <div id="resultArea" class="mt-4 d-none">
+                        <div class="alert alert-success d-flex align-items-center justify-content-between">
+                            <div><i class="fa-solid fa-circle-check me-2"></i><strong>Audio Ready!</strong></div>
+                            <a id="downloadLink" href="#" class="btn btn-dark btn-sm rounded-pill" download>
+                                <i class="fa-solid fa-download me-1"></i> Download MP3
+                            </a>
                         </div>
-
-                        <!-- Result Area -->
-                        <div id="resultArea" class="mt-4 d-none">
-                            <div class="alert alert-success border-0 shadow-sm d-flex align-items-center justify-content-between">
-                                <div>
-                                    <h6 class="mb-0 fw-bold"><i class="fa-solid fa-circle-check me-2"></i>Success!</h6>
-                                    <small>Your audio is ready to play.</small>
-                                </div>
-                                <a id="downloadLink" href="#" class="btn btn-dark btn-sm rounded-pill" download>
-                                    <i class="fa-solid fa-download me-1"></i> Save
-                                </a>
-                            </div>
-                            <audio id="audioPlayer" controls class="w-100 mt-2 rounded"></audio>
-                        </div>
-
+                        <audio id="audioPlayer" controls class="w-100 mt-2 rounded"></audio>
                     </div>
                 </div>
             </div>
+
         </div>
     </div>
+</div>
 
-    <script src="/static/js/script.js"></script>
-</body>
-</html>
+<!-- CONTENT SECTION (SEO Optimized) -->
+<div class="bg-white py-5">
+    <div class="container">
+        
+        <!-- Features Grid -->
+        <div class="row text-center mb-5">
+            <div class="col-12 mb-4">
+                <h2 class="fw-bold">Why Use ProVoice AI?</h2>
+                <p class="text-muted">The best free alternative to expensive TTS software.</p>
+            </div>
+            <div class="col-md-4 mb-4">
+                <div class="p-4 border rounded-4 h-100 bg-light">
+                    <i class="fa-solid fa-infinity fa-3x text-warning mb-3"></i>
+                    <h4 class="fw-bold">Unlimited Usage</h4>
+                    <p class="text-muted small">No credit limits. Generate as many audio files as you want for free, anytime, anywhere.</p>
+                </div>
+            </div>
+            <div class="col-md-4 mb-4">
+                <div class="p-4 border rounded-4 h-100 bg-light">
+                    <i class="fa-solid fa-robot fa-3x text-warning mb-3"></i>
+                    <h4 class="fw-bold">Neural Voices</h4>
+                    <p class="text-muted small">Powered by advanced Microsoft Edge technology to provide human-like accents in Urdu & Hindi.</p>
+                </div>
+            </div>
+            <div class="col-md-4 mb-4">
+                <div class="p-4 border rounded-4 h-100 bg-light">
+                    <i class="fa-solid fa-sliders fa-3x text-warning mb-3"></i>
+                    <h4 class="fw-bold">Full Control</h4>
+                    <p class="text-muted small">Customize your audio with precision. Adjust pitch for deeper voices and speed for faster narration.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- How It Works & Use Cases -->
+        <div class="row align-items-center mb-5">
+            <div class="col-lg-6">
+                <h3 class="fw-bold mb-3">Who is this tool for?</h3>
+                <p class="text-muted">ProVoice AI is designed for creators, students, and professionals.</p>
+                <ul class="list-unstyled">
+                    <li class="mb-2"><i class="fa-solid fa-check-circle text-success me-2"></i><strong>YouTubers:</strong> Create voiceovers for faceless channels.</li>
+                    <li class="mb-2"><i class="fa-solid fa-check-circle text-success me-2"></i><strong>Instagram Reels:</strong> Add trending AI voices to your clips.</li>
+                    <li class="mb-2"><i class="fa-solid fa-check-circle text-success me-2"></i><strong>Students:</strong> Listen to your notes instead of reading.</li>
+                    <li class="mb-2"><i class="fa-solid fa-check-circle text-success me-2"></i><strong>Developers:</strong> Test audio scripts quickly.</li>
+                </ul>
+            </div>
+            <div class="col-lg-6">
+                <div class="p-4 bg-dark text-white rounded-4 shadow">
+                    <h4 class="fw-bold mb-3">How to Convert Text to Audio?</h4>
+                    <ol>
+                        <li class="mb-3">Paste your script in the input box. You can use English, Urdu, or Hindi script.</li>
+                        <li class="mb-3">Select your desired language. Use <strong>Special Voices</strong> for fun effects like Horror or Cartoons.</li>
+                        <li class="mb-3">Adjust the <strong>Pitch</strong> and <strong>Speed</strong> sliders to customize the tone.</li>
+                        <li class="mb-3">Click <strong>Generate Audio</strong> and wait a few seconds.</li>
+                        <li>Listen online or click <strong>Download</strong> to save the MP3 file.</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+
+        <!-- FAQ Section (Great for SEO) -->
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <h3 class="fw-bold text-center mb-4">Frequently Asked Questions</h3>
+                <div class="accordion" id="faqAccordion">
+                    
+                    <div class="accordion-item border-0 mb-3 shadow-sm rounded">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed fw-bold rounded" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">
+                                Is ProVoice AI completely free?
+                            </button>
+                        </h2>
+                        <div id="faq1" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                            <div class="accordion-body text-muted">
+                                Yes! ProVoice AI is 100% free to use. There are no hidden subscription fees or credit limits. You can generate unlimited audio files.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item border-0 mb-3 shadow-sm rounded">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed fw-bold rounded" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">
+                                Can I use the audio for YouTube monetization?
+                            </button>
+                        </h2>
+                        <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                            <div class="accordion-body text-muted">
+                                Generally, yes. The voices generated are based on public neural text-to-speech libraries. Many creators use these voices for monetized content on YouTube, TikTok, and Instagram. However, we recommend checking the latest platform policies.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item border-0 mb-3 shadow-sm rounded">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed fw-bold rounded" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">
+                                Does it support Roman Urdu?
+                            </button>
+                        </h2>
+                        <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                            <div class="accordion-body text-muted">
+                                Currently, we support direct Urdu Script (اردو). For Roman Urdu text, we recommend using the "English (Indian Accent)" option, which handles Desi accents perfectly.
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+{% endblock %}
