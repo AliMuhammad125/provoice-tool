@@ -1,2 +1,2 @@
 web: gunicorn app:app
-worker: python piper_server.py
+worker: python piper_worker.py
