@@ -2,14 +2,11 @@ import os
 import uuid
 import time
 import sys
-import json
-import hashlib
+import requests
 import threading
 import subprocess
-from datetime import datetime
 from flask import Flask, render_template, request, jsonify
 from apscheduler.schedulers.background import BackgroundScheduler
-import requests
 
 app = Flask(__name__)
 
@@ -22,52 +19,42 @@ MAX_CHARS = 10000
 PIPER_PORT = 5001
 PIPER_URL = f"http://localhost:{PIPER_PORT}"
 
-# --- VOICE MAP (Piper Voices) ---
+# Voice Map (Piper Voices)
 VOICE_MAP = {
-    # English
     'en-us': {'Male': 'en_US-lessac-medium', 'Female': 'en_US-kathleen-medium'},
     'en-uk': {'Male': 'en_GB-semaine-medium', 'Female': 'en_GB-semaine-medium'},
-    
-    # Hindi & Urdu
     'hi': {'Male': 'hi_IN-medium', 'Female': 'hi_IN-medium'},
     'ur': {'Male': 'ur_PK-medium', 'Female': 'ur_PK-medium'},
-    
-    # Special Voices
     'story': {'Male': 'en_US-lessac-medium'},
     'horror': {'Male': 'en_US-vctk-medium'},
     'cartoon': {'Male': 'en_US-hfc_male-medium'},
     'news': {'Female': 'en_GB-semaine-medium'},
-    
-    # Other Languages
     'ar': {'Male': 'ar_SA-medium', 'Female': 'ar_SA-medium'},
     'es': {'Male': 'es_ES-medium', 'Female': 'es_ES-medium'},
     'fr': {'Male': 'fr_FR-medium', 'Female': 'fr_FR-medium'},
-    
     'default': {'Male': 'en_US-lessac-medium', 'Female': 'en_US-kathleen-medium'}
 }
 
-# --- CLEANUP TASK ---
+# Cleanup
 def cleanup_files():
     now = time.time()
     for f in os.listdir(AUDIO_DIR):
         f_path = os.path.join(AUDIO_DIR, f)
-        if os.path.isfile(f_path):
-            if now - os.path.getmtime(f_path) > 600:  # 10 Mins
-                try:
-                    os.remove(f_path)
-                except:
-                    pass
+        if os.path.isfile(f_path) and (now - os.path.getmtime(f_path) > 600):
+            try:
+                os.remove(f_path)
+            except:
+                pass
 
 scheduler = BackgroundScheduler()
 scheduler.add_job(func=cleanup_files, trigger="interval", minutes=10)
 scheduler.start()
 
-# --- PIPER SERVER STARTUP ---
+# Piper Server Startup
 def start_piper_server():
     """Start Piper TTS server"""
     print("🚀 Starting Piper TTS Server...")
     
-    # Check if piper is available
     try:
         import piper
         print("✅ Piper TTS is available")
@@ -75,11 +62,10 @@ def start_piper_server():
         print("❌ Piper TTS not installed!")
         return False
     
-    # Create voices directory
+    # Download voice if needed
     voices_dir = "voices"
     os.makedirs(voices_dir, exist_ok=True)
     
-    # Download default voice
     default_voice = "en_US-lessac-medium.onnx"
     voice_path = os.path.join(voices_dir, default_voice)
     
@@ -93,20 +79,19 @@ def start_piper_server():
             with open(voice_path, 'wb') as f:
                 for chunk in response.iter_content(chunk_size=8192):
                     f.write(chunk)
-            print(f"✅ Voice downloaded: {default_voice}")
+            print("✅ Voice downloaded")
         except Exception as e:
             print(f"❌ Failed to download voice: {e}")
             return False
     
     # Start Piper server
-    print(f"🔧 Starting Piper HTTP server on port {PIPER_PORT}...")
+    print(f"🔧 Starting Piper server on port {PIPER_PORT}...")
     
     cmd = [
         sys.executable, "-m", "piper",
         "--model", voice_path,
         "--host", "0.0.0.0",
-        "--port", str(PIPER_PORT),
-        "--debug"
+        "--port", str(PIPER_PORT)
     ]
     
     try:
@@ -114,29 +99,13 @@ def start_piper_server():
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True,
-            bufsize=1,
-            universal_newlines=True
+            text=True
         )
         
-        # Wait for server to start
         time.sleep(3)
         
         if process.poll() is None:
-            print("✅ Piper server started successfully!")
-            
-            # Monitor output in background thread
-            def monitor_output():
-                while True:
-                    if process.poll() is not None:
-                        break
-                    line = process.stdout.readline()
-                    if line:
-                        print(f"[Piper] {line.strip()}")
-            
-            thread = threading.Thread(target=monitor_output, daemon=True)
-            thread.start()
-            
+            print("✅ Piper server started!")
             return True
         else:
             print("❌ Piper server failed to start")
@@ -146,29 +115,23 @@ def start_piper_server():
         print(f"❌ Error starting Piper: {e}")
         return False
 
-# Start Piper server
+# Start Piper
 PIPER_READY = False
 try:
     PIPER_READY = start_piper_server()
 except Exception as e:
     print(f"⚠️ Piper startup error: {e}")
 
-# --- PIPER GENERATOR ---
-def generate_with_piper(text, voice, speed=0, pitch=0):
+# Piper Generator
+def generate_with_piper(text, voice, speed=0):
     """Generate audio using Piper TTS"""
     try:
-        # Prepare parameters
-        params = {
-            'text': text,
-            'voice': voice
-        }
+        params = {'text': text, 'voice': voice}
         
-        # Add speed if specified
         if speed != 0:
             length_scale = 1.0 - (speed / 100.0)
             params['length_scale'] = max(0.5, min(2.0, length_scale))
         
-        # Call Piper server
         response = requests.post(
             f"{PIPER_URL}/generate",
             json=params,
@@ -177,15 +140,13 @@ def generate_with_piper(text, voice, speed=0, pitch=0):
         
         if response.status_code == 200:
             return response.content
-        else:
-            print(f"Piper API error: {response.status_code}")
             
     except Exception as e:
-        print(f"Piper generation error: {e}")
+        print(f"Piper error: {e}")
     
     return None
 
-# --- ROUTES ---
+# Routes
 @app.route('/')
 def home():
     return render_template('index.html')
@@ -226,16 +187,15 @@ def generate():
         else:
             selected_voice = voice_config.get(gender, voice_config['Male'])
 
-        # Generate filename
-        filename = f"audio_{uuid.uuid4()[:8]}.wav"
+        # Generate filename (FIXED LINE)
+        filename = f"audio_{str(uuid.uuid4())[:8]}.wav"
         filepath = os.path.join(AUDIO_DIR, filename)
         
         # Generate with Piper
         if PIPER_READY:
-            audio_data = generate_with_piper(text, selected_voice, speed_val, pitch_val)
+            audio_data = generate_with_piper(text, selected_voice, speed_val)
             
             if audio_data:
-                # Save file
                 with open(filepath, 'wb') as f:
                     f.write(audio_data)
                 
@@ -256,7 +216,6 @@ def generate():
 
 @app.route('/api/status')
 def status():
-    """Check system status"""
     piper_status = 'offline'
     
     if PIPER_READY:
@@ -264,30 +223,25 @@ def status():
             response = requests.get(f"{PIPER_URL}/", timeout=5)
             piper_status = 'online' if response.status_code == 200 else 'offline'
         except:
-            piper_status = 'offline'
+            pass
     
     return jsonify({
         'status': 'online',
         'piper_ready': PIPER_READY,
-        'piper_status': piper_status,
-        'voices_available': list(VOICE_MAP.keys())
+        'piper_status': piper_status
     })
 
 @app.route('/test')
 def test():
-    """Test endpoint"""
     return jsonify({
         'status': 'ok',
         'piper_ready': PIPER_READY,
-        'audio_dir': os.path.exists(AUDIO_DIR),
-        'max_chars': MAX_CHARS
+        'audio_dir': os.path.exists(AUDIO_DIR)
     })
 
 if __name__ == '__main__':
-    print(f"🚀 TTS Server Starting...")
+    print(f"🚀 Server Starting...")
     print(f"🔊 Piper Ready: {PIPER_READY}")
-    print(f"🌍 Available Languages: {len(VOICE_MAP)}")
-    print(f"💾 Audio Directory: {AUDIO_DIR}")
     
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
