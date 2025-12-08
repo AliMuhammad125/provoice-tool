@@ -1,7 +1,7 @@
 import os
 import uuid
 import time
-import torch
+import subprocess
 from flask import Flask, render_template, request, jsonify
 
 app = Flask(__name__)
@@ -9,55 +9,57 @@ app = Flask(__name__)
 # Config
 AUDIO_DIR = os.path.join("static", "audio")
 os.makedirs(AUDIO_DIR, exist_ok=True)
-MAX_CHARS = 2000
+MAX_CHARS = 5000
 
-# Initialize TTS model
-tts_model = None
-tts_loaded = False
-
-try:
-    print("🚀 Loading Coqui TTS (High Quality)...")
-    # Use a smaller model that works on Render.com
-    from TTS.api import TTS
-    tts_model = TTS("tts_models/en/ljspeech/tacotron2-DDC")
-    tts_loaded = True
-    print("✅ Coqui TTS loaded successfully!")
-except Exception as e:
-    print(f"⚠️ Coqui TTS not available: {e}")
-    tts_loaded = False
-
-# Fallback to pyttsx3 if Coqui fails
-import pyttsx3
-pyttsx3_engine = pyttsx3.init()
-pyttsx3_engine.setProperty('rate', 170)
-pyttsx3_engine.setProperty('volume', 1.0)
-
-# Language mapping
-LANG_MAP = {
-    'en-us': 'en',
-    'en-uk': 'en', 
-    'en': 'en',
-    'hi': 'hi',
-    'ur': 'ur',
-    'default': 'en'
+# Voice Options
+VOICES = {
+    'en-us': 'en_US-lessac-medium',
+    'en-uk': 'en_GB-semaine-medium', 
+    'hi': 'hi_IN-medium',
+    'ur': 'ur_PK-medium',
+    'story': 'en_US-lessac-medium',
+    'horror': 'en_US-vctk-medium',
+    'cartoon': 'en_US-hfc_male-medium',
+    'news': 'en_GB-semaine-medium'
 }
+
+# Direct Piper Function
+def generate_with_piper(text, voice_model, output_file):
+    """Generate audio directly using Piper command"""
+    try:
+        # Build command
+        cmd = [
+            'python', '-m', 'piper',
+            '--model', f'voices/{voice_model}.onnx',
+            '--output_file', output_file
+        ]
+        
+        # Run Piper
+        process = subprocess.Popen(
+            cmd,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        
+        # Send text and wait
+        stdout, stderr = process.communicate(input=text)
+        
+        if process.returncode == 0:
+            return True
+        else:
+            print(f"Piper error: {stderr}")
+            return False
+            
+    except Exception as e:
+        print(f"Piper execution error: {e}")
+        return False
 
 # Routes
 @app.route('/')
 def home():
     return render_template('index.html')
-
-@app.route('/about')
-def about():
-    return render_template('about.html')
-
-@app.route('/privacy')
-def privacy():
-    return render_template('privacy.html')
-
-@app.route('/terms')
-def terms():
-    return render_template('terms.html')
 
 @app.route('/generate', methods=['POST'])
 def generate():
@@ -65,90 +67,48 @@ def generate():
         data = request.json
         text = data.get('text', '').strip()
         lang_code = data.get('language', 'en-us')
-        gender = data.get('gender', 'Male')
-        speed_val = int(data.get('speed', 0))
-
+        
         if not text:
-            return jsonify({'error': 'Please enter text.'}), 400
+            return jsonify({'error': 'No text'}), 400
+        
         if len(text) > MAX_CHARS:
-            return jsonify({'error': 'Text too long.'}), 400
-
-        lang = LANG_MAP.get(lang_code, LANG_MAP['default'])
+            return jsonify({'error': 'Text too long'}), 400
+        
+        # Get voice model
+        voice_model = VOICES.get(lang_code, VOICES['en-us'])
+        
+        # Generate filename
         filename = f"audio_{uuid.uuid4().hex[:8]}.wav"
         filepath = os.path.join(AUDIO_DIR, filename)
         
-        success = False
-        source = 'coqui'
+        # Generate with Piper
+        success = generate_with_piper(text, voice_model, filepath)
         
-        # Try Coqui TTS first (Best quality)
-        if tts_loaded and lang == 'en':  # Coqui works best with English
-            try:
-                tts_model.tts_to_file(text=text, file_path=filepath)
-                success = True
-            except Exception as e:
-                print(f"Coqui TTS error: {e}")
-                source = 'pyttsx3'
-        
-        # Fallback to pyttsx3
-        if not success:
-            try:
-                # Set voice gender
-                voices = pyttsx3_engine.getProperty('voices')
-                if gender == 'Female':
-                    for voice in voices:
-                        if 'female' in voice.name.lower():
-                            pyttsx3_engine.setProperty('voice', voice.id)
-                            break
-                
-                # Adjust speed
-                rate = 170 + (speed_val * 2)
-                pyttsx3_engine.setProperty('rate', max(100, min(300, rate)))
-                
-                # Convert .wav to .mp3 filename for pyttsx3
-                mp3_file = filepath.replace('.wav', '.mp3')
-                pyttsx3_engine.save_to_file(text, mp3_file)
-                pyttsx3_engine.runAndWait()
-                
-                # Rename to .wav for consistency
-                if os.path.exists(mp3_file):
-                    os.rename(mp3_file, filepath)
-                    success = True
-                    
-            except Exception as e:
-                print(f"pyttsx3 error: {e}")
-        
-        if success:
+        if success and os.path.exists(filepath):
             return jsonify({
                 'success': True,
-                'file_url': f"/static/audio/{filename}",
+                'file_url': f'/static/audio/{filename}',
                 'filename': filename,
-                'source': source,
-                'quality': 'high' if source == 'coqui' else 'medium'
+                'engine': 'piper'
             })
         else:
-            return jsonify({'error': 'Audio generation failed.'}), 500
+            return jsonify({'error': 'Audio generation failed'}), 500
             
     except Exception as e:
-        print(f"Server error: {e}")
-        return jsonify({'error': 'Server error.'}), 500
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/status')
 def status():
     return jsonify({
         'status': 'online',
-        'coqui_loaded': tts_loaded,
-        'pyttsx3_ready': True,
-        'quality': 'high' if tts_loaded else 'medium',
-        'languages': list(LANG_MAP.keys()),
-        'free': True
+        'engine': 'Piper TTS (Direct)',
+        'voices': list(VOICES.keys())
     })
 
 if __name__ == '__main__':
-    print("🎯 High Quality TTS Server")
-    print("🔊 Primary: Coqui TTS (Studio Quality)")
-    print("🔄 Fallback: pyttsx3 (System Voices)")
-    print("🌍 Languages: Multiple")
-    print("💰 Cost: 100% FREE")
+    print("🚀 Piper TTS Server (Direct Mode)")
+    print("🔊 No HTTP server, direct generation")
+    print("💰 100% FREE, Unlimited")
     
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
