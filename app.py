@@ -2,6 +2,7 @@ import os
 import uuid
 import time
 from flask import Flask, render_template, request, jsonify
+import pyttsx3
 
 app = Flask(__name__)
 
@@ -10,44 +11,33 @@ AUDIO_DIR = os.path.join("static", "audio")
 os.makedirs(AUDIO_DIR, exist_ok=True)
 MAX_CHARS = 3000
 
-# Initialize Coqui TTS
-print("🚀 Initializing Coqui TTS...")
+# Initialize pyttsx3 (ALWAYS WORKS)
+print("🚀 Initializing pyttsx3 TTS...")
+engine = pyttsx3.init()
 
-try:
-    # Try to import Coqui TTS
-    from TTS.api import TTS
-    tts_engine = TTS("tts_models/en/ljspeech/tacotron2-DDC")
-    TTS_AVAILABLE = True
-    print("✅ Coqui TTS loaded successfully!")
-    
-except ImportError:
-    print("❌ Coqui TTS not installed. Using fallback.")
-    TTS_AVAILABLE = False
-    tts_engine = None
+# Configure engine
+engine.setProperty('rate', 170)  # Speed
+engine.setProperty('volume', 1.0)  # Volume
 
-# Fallback: pyttsx3
-if not TTS_AVAILABLE:
-    try:
-        import pyttsx3
-        fallback_engine = pyttsx3.init()
-        fallback_engine.setProperty('rate', 170)
-        fallback_engine.setProperty('volume', 1.0)
-        print("✅ pyttsx3 fallback loaded")
-    except:
-        fallback_engine = None
-        print("❌ No TTS engine available")
+# Get available voices
+voices = engine.getProperty('voices')
+print(f"✅ Found {len(voices)} system voices")
 
-# Language mapping
-LANG_MAP = {
-    'en-us': 'en',
-    'en-uk': 'en', 
-    'en': 'en',
-    'hi': 'hi',  # Hindi
-    'ur': 'ur',  # Urdu
-    'es': 'es',
-    'fr': 'fr',
-    'ar': 'ar'
+# Voice mapping
+VOICES = {
+    'male': None,
+    'female': None
 }
+
+# Find male and female voices
+for voice in voices:
+    if 'female' in voice.name.lower() or 'zira' in voice.name.lower():
+        VOICES['female'] = voice.id
+    elif 'male' in voice.name.lower() or 'david' in voice.name.lower():
+        VOICES['male'] = voice.id
+
+print(f"🎭 Male voice: {'Found' if VOICES['male'] else 'Not found'}")
+print(f"🎭 Female voice: {'Found' if VOICES['female'] else 'Not found'}")
 
 # Routes
 @app.route('/')
@@ -72,8 +62,9 @@ def generate():
         data = request.json
         text = data.get('text', '').strip()
         lang_code = data.get('language', 'en-us')
-        gender = data.get('gender', 'Male')
-        speed = int(data.get('speed', 0))
+        gender = data.get('gender', 'Male').lower()
+        pitch_val = int(data.get('pitch', 0))
+        speed_val = int(data.get('speed', 0))
 
         # Validation
         if not text:
@@ -82,94 +73,90 @@ def generate():
         if len(text) > MAX_CHARS:
             return jsonify({'error': f'Text too long. Max {MAX_CHARS} characters.'}), 400
 
-        # Get language
-        lang = LANG_MAP.get(lang_code, 'en')
+        # Set voice based on gender
+        voice_id = VOICES.get(gender, VOICES['male'])
+        if voice_id:
+            engine.setProperty('voice', voice_id)
+        
+        # Adjust speed
+        base_rate = 170
+        adjusted_rate = base_rate + (speed_val * 2)
+        engine.setProperty('rate', max(100, min(300, adjusted_rate)))
+        
+        # Adjust pitch (pyttsx3 doesn't support pitch directly)
+        # We can adjust voice selection instead
         
         # Generate filename
-        filename = f"audio_{uuid.uuid4().hex[:8]}.wav"
+        filename = f"audio_{uuid.uuid4().hex[:8]}.mp3"
         filepath = os.path.join(AUDIO_DIR, filename)
         
-        # Try Coqui TTS first (Best quality)
-        if TTS_AVAILABLE and tts_engine and lang == 'en':
-            try:
-                # Generate with Coqui TTS
-                tts_engine.tts_to_file(text=text, file_path=filepath)
-                source = 'coqui_tts'
-                quality = 'high'
-                
-            except Exception as e:
-                print(f"Coqui TTS error: {e}")
-                # Fallback
-                if 'fallback_engine' in locals():
-                    fallback_engine.save_to_file(text, filepath.replace('.wav', '.mp3'))
-                    fallback_engine.runAndWait()
-                    source = 'pyttsx3'
-                    quality = 'medium'
-                    # Rename to .wav
-                    mp3_file = filepath.replace('.wav', '.mp3')
-                    if os.path.exists(mp3_file):
-                        os.rename(mp3_file, filepath)
-                else:
-                    return jsonify({'error': 'TTS engine failed.'}), 500
-                    
-        else:
-            # Use fallback
-            if 'fallback_engine' in locals():
-                fallback_engine.save_to_file(text, filepath.replace('.wav', '.mp3'))
-                fallback_engine.runAndWait()
-                source = 'pyttsx3'
-                quality = 'medium'
-                # Rename to .wav
-                mp3_file = filepath.replace('.wav', '.mp3')
-                if os.path.exists(mp3_file):
-                    os.rename(mp3_file, filepath)
-            else:
-                return jsonify({'error': 'No TTS engine available.'}), 500
-
-        # Check if file was created
+        # Generate audio
+        engine.save_to_file(text, filepath)
+        engine.runAndWait()
+        
+        # Verify file was created
         if os.path.exists(filepath) and os.path.getsize(filepath) > 0:
             return jsonify({
                 'success': True,
                 'file_url': f"/static/audio/{filename}",
                 'filename': filename,
-                'source': source,
-                'quality': quality,
-                'language': lang
+                'engine': 'pyttsx3',
+                'voice': gender,
+                'speed': speed_val
             })
         else:
-            return jsonify({'error': 'Audio file not created.'}), 500
+            return jsonify({'error': 'Audio file creation failed.'}), 500
             
     except Exception as e:
-        print(f"Server error: {e}")
+        print(f"Error: {e}")
         return jsonify({'error': 'Server error. Please try again.'}), 500
 
 @app.route('/api/status')
 def status():
     return jsonify({
         'status': 'online',
-        'coqui_tts': TTS_AVAILABLE,
-        'fallback_engine': 'pyttsx3' if 'fallback_engine' in locals() else 'none',
-        'languages': list(LANG_MAP.keys()),
+        'engine': 'pyttsx3',
+        'voices_available': len(voices),
+        'male_voice': VOICES['male'] is not None,
+        'female_voice': VOICES['female'] is not None,
         'max_chars': MAX_CHARS,
         'free': True,
-        'quality': 'high' if TTS_AVAILABLE else 'medium'
+        'unlimited': True,
+        'quality': 'good'
+    })
+
+@app.route('/api/voices')
+def list_voices():
+    """List all available system voices"""
+    voice_list = []
+    for i, voice in enumerate(voices):
+        voice_list.append({
+            'id': i,
+            'name': voice.name,
+            'gender': 'female' if 'female' in voice.name.lower() else 'male',
+            'languages': voice.languages if hasattr(voice, 'languages') else ['en']
+        })
+    
+    return jsonify({
+        'voices': voice_list,
+        'total': len(voice_list)
     })
 
 @app.route('/test')
 def test():
     return jsonify({
         'status': 'ok',
-        'coqui_tts': TTS_AVAILABLE,
-        'audio_dir': os.path.exists(AUDIO_DIR)
+        'message': 'TTS Server is running',
+        'timestamp': time.time()
     })
 
 if __name__ == '__main__':
-    print("🎯 Coqui TTS Server")
-    print(f"🔊 Coqui TTS: {'✅ Available' if TTS_AVAILABLE else '❌ Not available'}")
-    print(f"🔄 Fallback: pyttsx3")
-    print(f"🌍 Languages: {len(LANG_MAP)}")
-    print(f"💰 Cost: 100% FREE")
-    print(f"🎵 Quality: {'High' if TTS_AVAILABLE else 'Medium'}")
+    print("🎯 Python TTS Server Started")
+    print("🔊 Engine: pyttsx3 (System TTS)")
+    print("💾 Uses: Windows David/Zira, Linux eSpeak voices")
+    print("💰 Cost: 100% FREE")
+    print("♾️ Limits: UNLIMITED")
+    print("🎵 Quality: GOOD (System voices)")
     
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
