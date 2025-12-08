@@ -1,4 +1,4 @@
-# requirements.txt (if Coqui fails)
 Flask==2.3.3
+gtts==2.4.0
 pyttsx3==2.90
 gunicorn==21.2.0
