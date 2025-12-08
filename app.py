@@ -1,127 +1,48 @@
 import os
 import uuid
 import time
-import json
-from flask import Flask, render_template, request, jsonify, send_from_directory
-from TTS.api import TTS
-import threading
+import torch
+from flask import Flask, render_template, request, jsonify
 
 app = Flask(__name__)
 
-# Configuration
+# Config
 AUDIO_DIR = os.path.join("static", "audio")
 os.makedirs(AUDIO_DIR, exist_ok=True)
-MAX_CHARS = 5000
-CACHE_FILE = "tts_cache.json"
+MAX_CHARS = 2000
 
-# Global TTS engine
-tts_engine = None
-tts_loading = False
+# Initialize TTS model
+tts_model = None
 tts_loaded = False
 
+try:
+    print("🚀 Loading Coqui TTS (High Quality)...")
+    # Use a smaller model that works on Render.com
+    from TTS.api import TTS
+    tts_model = TTS("tts_models/en/ljspeech/tacotron2-DDC")
+    tts_loaded = True
+    print("✅ Coqui TTS loaded successfully!")
+except Exception as e:
+    print(f"⚠️ Coqui TTS not available: {e}")
+    tts_loaded = False
+
+# Fallback to pyttsx3 if Coqui fails
+import pyttsx3
+pyttsx3_engine = pyttsx3.init()
+pyttsx3_engine.setProperty('rate', 170)
+pyttsx3_engine.setProperty('volume', 1.0)
+
 # Language mapping
-LANGUAGE_MAP = {
+LANG_MAP = {
     'en-us': 'en',
-    'en-uk': 'en',
-    'en-in': 'en',
-    'hi': 'hi',      # Hindi
-    'ur': 'ur',      # Urdu
-    'ar': 'ar',      # Arabic
-    'es': 'es',      # Spanish
-    'fr': 'fr',      # French
-    'de': 'de',      # German
-    'it': 'it',      # Italian
-    'pt': 'pt',      # Portuguese
+    'en-uk': 'en', 
+    'en': 'en',
+    'hi': 'hi',
+    'ur': 'ur',
     'default': 'en'
 }
 
-# Voice gender mapping (Coqui uses speakers, we map genders)
-VOICE_GENDER_MAP = {
-    'en': {'Male': 'male', 'Female': 'female'},
-    'hi': {'Male': 'male', 'Female': 'female'},
-    'ur': {'Male': 'male', 'Female': 'female'},
-    'default': {'Male': 'male', 'Female': 'female'}
-}
-
-# Load cache
-def load_cache():
-    if os.path.exists(CACHE_FILE):
-        try:
-            with open(CACHE_FILE, 'r') as f:
-                return json.load(f)
-        except:
-            return {}
-    return {}
-
-# Save cache
-def save_cache(cache):
-    try:
-        with open(CACHE_FILE, 'w') as f:
-            json.dump(cache, f)
-    except:
-        pass
-
-# Initialize TTS in background
-def init_tts():
-    global tts_engine, tts_loaded, tts_loading
-    
-    if tts_loading or tts_loaded:
-        return
-    
-    tts_loading = True
-    print("🚀 Initializing Coqui TTS XTTS-v2...")
-    
-    try:
-        # Load the best multilingual model
-        tts_engine = TTS(model_name="tts_models/multilingual/multi-dataset/xtts_v2")
-        
-        # Test if Hindi/Urdu are supported
-        test_texts = {
-            'hi': 'नमस्ते',
-            'ur': 'السلام علیکم',
-            'en': 'Hello'
-        }
-        
-        print("✅ Coqui TTS loaded successfully!")
-        print(f"🔊 Available languages: {tts_engine.languages if hasattr(tts_engine, 'languages') else 'All'}")
-        print(f"🎭 Model: XTTS-v2 (Multilingual)")
-        
-        tts_loaded = True
-        
-    except Exception as e:
-        print(f"❌ Error loading TTS: {e}")
-        print("⚠️ Falling back to basic TTS functionality")
-        tts_loaded = False
-    
-    tts_loading = False
-
-# Cleanup old audio files
-def cleanup_files():
-    """Remove files older than 2 hours"""
-    try:
-        current_time = time.time()
-        for filename in os.listdir(AUDIO_DIR):
-            filepath = os.path.join(AUDIO_DIR, filename)
-            if os.path.isfile(filepath):
-                file_age = current_time - os.path.getmtime(filepath)
-                if file_age > 7200:  # 2 hours
-                    try:
-                        os.remove(filepath)
-                    except:
-                        pass
-    except Exception as e:
-        print(f"Cleanup error: {e}")
-
-# Start TTS initialization in background
-tts_thread = threading.Thread(target=init_tts, daemon=True)
-tts_thread.start()
-
-# Start cleanup scheduler
-cleanup_thread = threading.Thread(target=lambda: [time.sleep(3600), cleanup_files()], daemon=True)
-cleanup_thread.start()
-
-# ========== ROUTES ==========
-
+# Routes
 @app.route('/')
 def home():
     return render_template('index.html')
@@ -140,164 +61,94 @@ def terms():
 
 @app.route('/generate', methods=['POST'])
 def generate():
-    """Generate audio from text"""
     try:
-        # Parse request data
         data = request.json
         text = data.get('text', '').strip()
         lang_code = data.get('language', 'en-us')
         gender = data.get('gender', 'Male')
-        pitch = int(data.get('pitch', 0))
-        speed = int(data.get('speed', 0))
-        
-        # Validate input
+        speed_val = int(data.get('speed', 0))
+
         if not text:
             return jsonify({'error': 'Please enter text.'}), 400
-        
         if len(text) > MAX_CHARS:
-            return jsonify({'error': f'Text too long. Maximum {MAX_CHARS} characters allowed.'}), 400
-        
-        # Generate cache key
-        cache_key = f"{text}_{lang_code}_{gender}_{pitch}_{speed}"
-        
-        # Check cache first
-        cache = load_cache()
-        if cache_key in cache and os.path.exists(os.path.join(AUDIO_DIR, cache[cache_key])):
-            return jsonify({
-                'success': True,
-                'file_url': f"/static/audio/{cache[cache_key]}",
-                'filename': cache[cache_key],
-                'source': 'cache'
-            })
-        
-        # Get language code
-        language = LANGUAGE_MAP.get(lang_code, LANGUAGE_MAP['default'])
-        
-        # Generate filename
+            return jsonify({'error': 'Text too long.'}), 400
+
+        lang = LANG_MAP.get(lang_code, LANG_MAP['default'])
         filename = f"audio_{uuid.uuid4().hex[:8]}.wav"
         filepath = os.path.join(AUDIO_DIR, filename)
         
-        # Wait for TTS to load (max 30 seconds)
-        if not tts_loaded:
-            start_time = time.time()
-            while not tts_loaded and (time.time() - start_time) < 30:
-                time.sleep(1)
+        success = False
+        source = 'coqui'
         
-        # Generate audio
-        if tts_loaded and tts_engine:
+        # Try Coqui TTS first (Best quality)
+        if tts_loaded and lang == 'en':  # Coqui works best with English
             try:
-                # Prepare parameters
-                params = {
-                    'text': text,
-                    'file_path': filepath,
-                    'language': language
-                }
-                
-                # Add speed adjustment if requested
-                if speed != 0:
-                    # Convert speed to rate (Coqui uses different param)
-                    rate = 1.0 + (speed / 100.0)
-                    params['rate'] = rate
-                
-                # Generate audio
-                tts_engine.tts_to_file(**params)
-                
-                # Cache the result
-                cache[cache_key] = filename
-                save_cache(cache)
-                
-                return jsonify({
-                    'success': True,
-                    'file_url': f"/static/audio/{filename}",
-                    'filename': filename,
-                    'source': 'coqui_tts',
-                    'language': language,
-                    'quality': 'studio'
-                })
-                
+                tts_model.tts_to_file(text=text, file_path=filepath)
+                success = True
             except Exception as e:
-                print(f"TTS generation error: {e}")
-                # Fall through to backup method
+                print(f"Coqui TTS error: {e}")
+                source = 'pyttsx3'
         
-        # Backup method: Return error with instructions
-        return jsonify({
-            'success': False,
-            'error': 'TTS engine is initializing. Please try again in 30 seconds.',
-            'retry_after': 30
-        }), 503
+        # Fallback to pyttsx3
+        if not success:
+            try:
+                # Set voice gender
+                voices = pyttsx3_engine.getProperty('voices')
+                if gender == 'Female':
+                    for voice in voices:
+                        if 'female' in voice.name.lower():
+                            pyttsx3_engine.setProperty('voice', voice.id)
+                            break
+                
+                # Adjust speed
+                rate = 170 + (speed_val * 2)
+                pyttsx3_engine.setProperty('rate', max(100, min(300, rate)))
+                
+                # Convert .wav to .mp3 filename for pyttsx3
+                mp3_file = filepath.replace('.wav', '.mp3')
+                pyttsx3_engine.save_to_file(text, mp3_file)
+                pyttsx3_engine.runAndWait()
+                
+                # Rename to .wav for consistency
+                if os.path.exists(mp3_file):
+                    os.rename(mp3_file, filepath)
+                    success = True
+                    
+            except Exception as e:
+                print(f"pyttsx3 error: {e}")
         
+        if success:
+            return jsonify({
+                'success': True,
+                'file_url': f"/static/audio/{filename}",
+                'filename': filename,
+                'source': source,
+                'quality': 'high' if source == 'coqui' else 'medium'
+            })
+        else:
+            return jsonify({'error': 'Audio generation failed.'}), 500
+            
     except Exception as e:
         print(f"Server error: {e}")
-        return jsonify({'error': 'Server error. Please try again.'}), 500
+        return jsonify({'error': 'Server error.'}), 500
 
 @app.route('/api/status')
 def status():
-    """API status endpoint"""
     return jsonify({
         'status': 'online',
-        'tts_loaded': tts_loaded,
-        'tts_loading': tts_loading,
-        'engine': 'Coqui TTS XTTS-v2',
-        'supported_languages': list(LANGUAGE_MAP.keys()),
-        'max_chars': MAX_CHARS,
-        'cache_size': len(load_cache()),
-        'audio_files': len(os.listdir(AUDIO_DIR)) if os.path.exists(AUDIO_DIR) else 0
+        'coqui_loaded': tts_loaded,
+        'pyttsx3_ready': True,
+        'quality': 'high' if tts_loaded else 'medium',
+        'languages': list(LANG_MAP.keys()),
+        'free': True
     })
-
-@app.route('/api/languages')
-def languages():
-    """List supported languages"""
-    return jsonify({
-        'languages': [
-            {'code': 'en-us', 'name': 'English (US)', 'voice': 'Neural'},
-            {'code': 'en-uk', 'name': 'English (UK)', 'voice': 'British'},
-            {'code': 'hi', 'name': 'Hindi', 'voice': 'Indian'},
-            {'code': 'ur', 'name': 'Urdu', 'voice': 'Pakistani'},
-            {'code': 'ar', 'name': 'Arabic', 'voice': 'Middle Eastern'},
-            {'code': 'es', 'name': 'Spanish', 'voice': 'European'},
-            {'code': 'fr', 'name': 'French', 'voice': 'European'},
-            {'code': 'de', 'name': 'German', 'voice': 'European'},
-            {'code': 'it', 'name': 'Italian', 'voice': 'European'},
-            {'code': 'pt', 'name': 'Portuguese', 'voice': 'Brazilian'}
-        ]
-    })
-
-@app.route('/test')
-def test():
-    """Test endpoint"""
-    return jsonify({
-        'status': 'ok',
-        'message': 'TTS Server is running',
-        'timestamp': time.time(),
-        'version': '2.0.0'
-    })
-
-@app.route('/static/audio/<filename>')
-def serve_audio(filename):
-    """Serve audio files"""
-    return send_from_directory(AUDIO_DIR, filename)
-
-# Error handlers
-@app.errorhandler(404)
-def not_found(e):
-    return jsonify({'error': 'Endpoint not found'}), 404
-
-@app.errorhandler(500)
-def server_error(e):
-    return jsonify({'error': 'Internal server error'}), 500
 
 if __name__ == '__main__':
-    print("=" * 50)
-    print("🎯 COQUI TTS SERVER - STUDIO QUALITY")
-    print("=" * 50)
-    print("🔊 Engine: Coqui TTS XTTS-v2")
-    print("🌍 Languages: English, Hindi, Urdu, Arabic, Spanish, French + more")
-    print("🎵 Quality: Studio Grade (Near Human)")
+    print("🎯 High Quality TTS Server")
+    print("🔊 Primary: Coqui TTS (Studio Quality)")
+    print("🔄 Fallback: pyttsx3 (System Voices)")
+    print("🌍 Languages: Multiple")
     print("💰 Cost: 100% FREE")
-    print("♾️ Limits: UNLIMITED")
-    print("⚡ Cache: Enabled")
-    print("=" * 50)
     
-    # Start the server
     port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=False)
+    app.run(host='0.0.0.0', port=port)
