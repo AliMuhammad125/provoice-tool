@@ -92,12 +92,20 @@ async def generate_audio_edge(text, voice, pitch, rate, filename):
 def generate_audio_piper(text, voice, speed, filename):
     """Generate audio using Piper TTS server"""
     try:
+        # Piper uses different parameter format
+        # Convert speed to Piper's length_scale (1.0 = normal, <1.0 = faster, >1.0 = slower)
+        length_scale = 1.0
+        if speed > 0:
+            length_scale = max(0.5, 1.0 - (speed / 200.0))  # +100% speed = 0.5x length
+        elif speed < 0:
+            length_scale = min(2.0, 1.0 + (abs(speed) / 100.0))  # -100% speed = 2.0x length
+        
         response = requests.post(
             f"{PIPER_SERVER_URL}/generate",
             json={
                 'text': text,
                 'voice': voice,
-                'speed': speed
+                'length_scale': length_scale
             },
             timeout=30
         )
@@ -170,8 +178,6 @@ def generate():
         if TTS_MODE in ['auto', 'piper']:
             # Piper uses .wav format
             piper_filename = filename + ".wav"
-            pitch_str = f"{'+' if pitch_val >= 0 else ''}{pitch_val}Hz"
-            rate_str = f"{'+' if speed_val >= 0 else ''}{speed_val}%"
             
             if generate_audio_piper(text, selected_voice, speed_val, piper_filename):
                 audio_generated = True
@@ -218,30 +224,75 @@ def generate():
 def status():
     """Check TTS system status"""
     piper_status = 'unknown'
+    piper_error = None
+    
     try:
         response = requests.get(f"{PIPER_SERVER_URL}/status", timeout=5)
         piper_status = 'online' if response.status_code == 200 else 'offline'
-    except:
+    except requests.exceptions.ConnectionError:
         piper_status = 'offline'
+        piper_error = 'Connection refused'
+    except Exception as e:
+        piper_status = 'error'
+        piper_error = str(e)
     
     return jsonify({
         'status': 'online',
         'piper_server': piper_status,
+        'piper_error': piper_error,
         'tts_mode': TTS_MODE,
         'roman_urdu_support': ROMAN_URDU_SUPPORT,
         'voices_available': list(EDGE_VOICE_MAP.keys())
     })
 
 if __name__ == '__main__':
-    # Start Piper server in background thread
+    # Start Piper server in background thread if mode is auto or piper
     if TTS_MODE in ['auto', 'piper']:
         try:
+            print("🚀 Attempting to start Piper TTS server...")
+            
+            # Try to import piper to check if installed
+            try:
+                import piper
+                print("✅ Piper TTS is installed")
+            except ImportError:
+                print("❌ Piper TTS package not installed. Falling back to Edge-TTS.")
+                TTS_MODE = 'edge'
+                raise ImportError("Piper TTS not installed")
+            
+            # Import and start server
             from piper_server import start_piper_server
-            piper_thread = threading.Thread(target=start_piper_server, daemon=True)
+            
+            # Start in background thread
+            piper_thread = threading.Thread(
+                target=start_piper_server,
+                daemon=True,
+                name="PiperServerThread"
+            )
             piper_thread.start()
-            print("✅ Piper TTS server started in background")
-        except ImportError:
-            print("⚠️ Piper server module not found. Using Edge-TTS only.")
+            
+            print("✅ Piper TTS server thread started")
+            
+            # Give server some time to initialize
+            import time
+            time.sleep(2)
+            
+        except ImportError as e:
+            print(f"⚠️ Piper server module not found: {e}")
+            print("⚠️ Falling back to Edge-TTS only")
             TTS_MODE = 'edge'
+        except Exception as e:
+            print(f"❌ Error starting Piper server: {e}")
+            print("⚠️ Falling back to Edge-TTS")
+            TTS_MODE = 'edge'
+    else:
+        print(f"📢 Running in {TTS_MODE} mode (Piper disabled)")
     
-    app.run(debug=False, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+    # Get port from environment (Render.com provides this)
+    port = int(os.environ.get('PORT', 5000))
+    
+    print(f"🌐 Starting Flask server on port {port}")
+    print(f"🔧 TTS Mode: {TTS_MODE}")
+    print(f"🇵🇰 Roman Urdu Support: {ROMAN_URDU_SUPPORT}")
+    
+    app.run(debug=False, host='0.0.0.0', port=port)
