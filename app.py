@@ -1,6 +1,7 @@
 import os
 import io
 import wave
+import base64
 from flask import Flask, request, Response, jsonify, render_template_string
 from google import genai
 from google.genai import types
@@ -9,27 +10,28 @@ app = Flask(__name__)
 
 API_KEY = os.environ.get("GEMINI_API_KEY")
 
+# --- UI SAME RAHEGI ---
 HTML_UI = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gemini 2.0 TTS</title>
+    <title>Gemini 2.0 TTS Fix</title>
     <style>
         body { font-family: sans-serif; background: #f0f2f5; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
         .container { background: white; padding: 30px; border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); width: 400px; text-align: center; }
         textarea { width: 100%; height: 100px; padding: 10px; border-radius: 8px; border: 1px solid #ccc; box-sizing: border-box; }
         button { width: 100%; padding: 12px; margin-top: 15px; background: #007bff; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
         button:disabled { background: #ccc; }
-        .status { margin-top: 15px; color: #666; font-size: 14px; }
+        .status { margin-top: 15px; color: #666; font-size: 14px; word-wrap: break-word; }
         audio { width: 100%; margin-top: 20px; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h2>Gemini 2.0 TTS</h2>
-        <textarea id="textInput" placeholder="Enter text...">Hello! How are you doing today?</textarea>
+        <h2>Gemini 2.0 TTS (Fix)</h2>
+        <textarea id="textInput" placeholder="Enter text...">Hello! This should work now with the experimental model.</textarea>
         <select id="voiceSelect" style="width:100%; padding:10px; margin-top:10px;">
             <option value="Aoede">Aoede (Female)</option>
             <option value="Puck">Puck (Male)</option>
@@ -45,7 +47,7 @@ HTML_UI = """
             const text = document.getElementById('textInput').value;
             const voice = document.getElementById('voiceSelect').value;
             btn.disabled = true;
-            document.getElementById('status').innerText = "Generating...";
+            document.getElementById('status').innerText = "Connecting to Gemini Experimental...";
             try {
                 const res = await fetch('/tts', {
                     method: 'POST',
@@ -85,7 +87,7 @@ def index():
 @app.route('/tts', methods=['POST'])
 def tts():
     if not API_KEY:
-        return jsonify({"error": "API Key not found in Environment"}), 500
+        return jsonify({"error": "API Key missing in Render settings"}), 500
     
     try:
         data = request.json
@@ -94,9 +96,11 @@ def tts():
 
         client = genai.Client(api_key=API_KEY)
         
-        # MODEL NAME: Try 'gemini-2.0-flash' or 'gemini-2.0-flash-exp'
+        # --- FIX: Using the Experimental model name which supports Audio ---
+        model_id = 'gemini-2.0-flash-exp' 
+
         response = client.models.generate_content(
-            model='gemini-2.0-flash', 
+            model=model_id, 
             contents=text,
             config=types.GenerateContentConfig(
                 response_modalities=["AUDIO"],
@@ -108,18 +112,15 @@ def tts():
             )
         )
         
-        import base64
         for part in response.candidates[0].content.parts:
             if part.inline_data:
                 audio_wav = pcm_to_wav(part.inline_data.data)
-                # Base64 mein convert kar rahe hain taaki JSON mein bhej saken
                 encoded_audio = base64.b64encode(audio_wav).decode('utf-8')
                 return jsonify({"audio": encoded_audio})
         
-        return jsonify({"error": "No audio parts in response"}), 400
+        return jsonify({"error": "Gemini didn't return any audio. Try shorter text."}), 400
 
     except Exception as e:
-        print(f"DEBUG ERROR: {str(e)}") # Ye Render Logs mein dikhayega
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
