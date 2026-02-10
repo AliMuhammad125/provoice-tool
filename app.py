@@ -1,140 +1,88 @@
 import os
-import uuid
-import time
-import torch
-from flask import Flask, render_template, request, jsonify
-import numpy as np
-from scipy.io.wavfile import write as write_wav
+import io
+import wave
+from flask import Flask, request, Response, jsonify
+from google import genai
+from google.genai import types
 
 app = Flask(__name__)
 
-# Config
-AUDIO_DIR = os.path.join("static", "audio")
-os.makedirs(AUDIO_DIR, exist_ok=True)
-MAX_CHARS = 500
+# --- CONFIGURATION ---
+# Yahan apni Google AI Studio wali free API key lagayein
+# (Aapko Google Cloud Console ya credit card ki zarurat nahi!)
+API_KEY = "AIzaSyAgU-0zlcnk7Et65pJjYPryBq2XGqIPlV4"
 
-print("🚀 Loading Bark TTS (Best Quality Free)...")
+# Initialize the new Gemini Client
+client = genai.Client(api_key=API_KEY)
 
-# Try to load Bark TTS
-bark_model = None
-try:
-    from bark import SAMPLE_RATE, generate_audio, preload_models
-    import numpy as np
+def pcm_to_wav(pcm_data, sample_rate=24000, channels=1, sample_width=2):
+    """Gemini raw PCM audio return karta hai, is function se hum usay WAV format mein convert karte hain"""
+    wav_io = io.BytesIO()
+    with wave.open(wav_io, 'wb') as wav_file:
+        wav_file.setnchannels(channels)
+        wav_file.setsampwidth(sample_width)
+        wav_file.setframerate(sample_rate)
+        wav_file.writeframes(pcm_data)
+    return wav_io.getvalue()
+
+def generate_gemini_audio(text, voice_name="Aoede"):
+    """
+    Directly generates audio using Gemini 2.0 Flash.
+    Available Voices: Aoede, Puck, Charon, Kore, Fenrir
+    """
+    response = client.models.generate_content(
+        model='gemini-2.0-flash',
+        contents=text,
+        config=types.GenerateContentConfig(
+            # Ye API ko batata hai ke humein text nahi, Awaz (Audio) chahiye!
+            response_modalities=["AUDIO"],
+            speech_config=types.SpeechConfig(
+                voice_config=types.VoiceConfig(
+                    prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                        voice_name=voice_name
+                    )
+                )
+            )
+        )
+    )
     
-    # Preload models (first time only)
-    print("📦 Downloading Bark models (first time, ~5-10 minutes)...")
-    preload_models()
-    
-    bark_model = {
-        'generate_audio': generate_audio,
-        'SAMPLE_RATE': SAMPLE_RATE
-    }
-    
-    print("✅ Bark TTS loaded successfully!")
-    print("🎵 Quality: EXCELLENT (Better than Edge-TTS)")
-    print("💰 Cost: 100% FREE")
-    print("♾️ Limits: NONE")
-    
-except Exception as e:
-    print(f"❌ Bark TTS load failed: {e}")
-    bark_model = None
+    # Extract raw audio bytes from the response
+    for part in response.candidates[0].content.parts:
+        if part.inline_data:
+            # Raw PCM data ko .wav file format mein convert karein
+            raw_pcm = part.inline_data.data
+            return pcm_to_wav(raw_pcm)
+            
+    raise Exception("Audio data not found in Gemini's response")
 
-# Fallback: pyttsx3
-if not bark_model:
-    try:
-        import pyttsx3
-        fallback_engine = pyttsx3.init()
-        fallback_engine.setProperty('rate', 170)
-        print("✅ Fallback: pyttsx3 loaded")
-    except:
-        fallback_engine = None
-
-# Routes
-@app.route('/')
-def home():
-    return render_template('index.html')
-
-@app.route('/generate', methods=['POST'])
-def generate():
+@app.route('/tts', methods=['POST'])
+def tts():
     try:
         data = request.json
-        text = data.get('text', '').strip()
+        text = data.get('text', 'Hello, this is my new voice from Gemini 2.0.')
         
-        if not text:
-            return jsonify({'error': 'Please enter text.'}), 400
+        # Default voice 'Aoede' hai. Lekin aap JSON me "voice": "Puck" wagera bhi bhej sakte hain
+        voice = data.get('voice', 'Aoede') 
         
-        if len(text) > MAX_CHARS:
-            return jsonify({'error': f'Text too long. Max {MAX_CHARS} characters.'}), 400
+        # Audio generate karein
+        audio_wav = generate_gemini_audio(text, voice)
         
-        filename = f"audio_{uuid.uuid4().hex[:8]}.wav"
-        filepath = os.path.join(AUDIO_DIR, filename)
-        
-        # Try Bark TTS first (EXCELLENT QUALITY)
-        if bark_model:
-            try:
-                # Generate with Bark
-                audio_array = bark_model['generate_audio'](
-                    text,
-                    history_prompt="v2/en_speaker_6"  # Professional voice
-                )
-                
-                # Save as WAV
-                write_wav(
-                    filepath,
-                    bark_model['SAMPLE_RATE'],
-                    audio_array
-                )
-                
-                return jsonify({
-                    'success': True,
-                    'file_url': f"/static/audio/{filename}",
-                    'filename': filename,
-                    'quality': 'excellent',
-                    'engine': 'bark_tts'
-                })
-                
-            except Exception as e:
-                print(f"Bark TTS error: {e}")
-        
-        # Fallback to pyttsx3
-        if 'fallback_engine' in locals() and fallback_engine:
-            try:
-                fallback_engine.save_to_file(text, filepath)
-                fallback_engine.runAndWait()
-                
-                return jsonify({
-                    'success': True,
-                    'file_url': f"/static/audio/{filename}",
-                    'filename': filename,
-                    'quality': 'good',
-                    'engine': 'pyttsx3'
-                })
-            except:
-                pass
-        
-        return jsonify({'error': 'All TTS engines failed.'}), 500
-        
+        # Return as WAV file
+        return Response(
+            audio_wav,
+            mimetype='audio/wav',
+            headers={'Content-Disposition': 'attachment; filename=gemini_voice.wav'}
+        )
     except Exception as e:
-        print(f"Error: {e}")
-        return jsonify({'error': 'Server error.'}), 500
+        return jsonify({"error": str(e)}), 500
 
-@app.route('/api/status')
-def status():
+@app.route('/')
+def index():
     return jsonify({
-        'status': 'online',
-        'bark_tts': bark_model is not None,
-        'fallback': 'fallback_engine' in locals(),
-        'quality': 'excellent' if bark_model else 'good',
-        'max_chars': MAX_CHARS,
-        'free': True,
-        'unlimited': True
+        "status": "Gemini 2.0 Flash Native Audio is Active! (Free Tier)",
+        "message": "Send a POST request to /tts",
+        "available_voices": ["Aoede", "Puck", "Charon", "Kore", "Fenrir"]
     })
 
 if __name__ == '__main__':
-    print("🎯 Bark TTS Server Started")
-    print("🔊 Quality: EXCELLENT (Best Free)")
-    print("🌍 Supports: English + Emotions + Sound effects")
-    print("⚠️ Note: First request may take 30-60 seconds")
-    
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
+    app.run(host='0.0.0.0', port=5000, debug=True)
