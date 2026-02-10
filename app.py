@@ -7,10 +7,10 @@ from google.genai import types
 
 app = Flask(__name__)
 
-# API Key from Environment Variable
+# Render ke dashboard se API Key uthayega
 API_KEY = os.environ.get("GEMINI_API_KEY")
 
-# --- HTML INTERFACE ---
+# --- KHOOBSURAT INTERFACE (HTML) ---
 HTML_UI = """
 <!DOCTYPE html>
 <html lang="en">
@@ -19,51 +19,61 @@ HTML_UI = """
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gemini 2.0 High-Quality TTS</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7f6; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .container { background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); width: 100%; max-width: 500px; text-align: center; }
-        h1 { color: #1a73e8; margin-bottom: 1rem; }
-        textarea { width: 100%; height: 120px; padding: 10px; border: 2px solid #ddd; border-radius: 8px; font-size: 16px; resize: none; box-sizing: border-box; }
-        select, button { width: 100%; padding: 12px; margin-top: 1rem; border-radius: 8px; border: none; font-size: 16px; cursor: pointer; }
-        select { background-color: #f1f3f4; border: 1px solid #ddd; }
-        button { background-color: #1a73e8; color: white; font-weight: bold; transition: background 0.3s; }
-        button:hover { background-color: #1557b0; }
-        button:disabled { background-color: #ccc; cursor: not-allowed; }
-        audio { width: 100%; margin-top: 1.5rem; }
-        .status { margin-top: 10px; font-size: 14px; color: #666; }
+        body { font-family: 'Segoe UI', sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; color: #333; }
+        .container { background: white; padding: 2.5rem; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); width: 100%; max-width: 450px; text-align: center; }
+        h1 { color: #4a148c; margin-bottom: 0.5rem; font-size: 24px; }
+        p { color: #666; margin-bottom: 1.5rem; font-size: 14px; }
+        textarea { width: 100%; height: 100px; padding: 15px; border: 2px solid #e0e0e0; border-radius: 12px; font-size: 16px; resize: none; box-sizing: border-box; outline: none; transition: border-color 0.3s; }
+        textarea:focus { border-color: #764ba2; }
+        select { width: 100%; padding: 12px; margin-top: 1rem; border-radius: 10px; border: 2px solid #e0e0e0; background: #fff; cursor: pointer; }
+        button { width: 100%; padding: 15px; margin-top: 1.5rem; border-radius: 10px; border: none; background: #764ba2; color: white; font-size: 16px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 15px rgba(118, 75, 162, 0.3); transition: transform 0.2s, background 0.3s; }
+        button:hover { background: #5e35b1; transform: translateY(-2px); }
+        button:active { transform: translateY(0); }
+        button:disabled { background: #ccc; box-shadow: none; cursor: not-allowed; }
+        .audio-section { margin-top: 2rem; border-top: 1px solid #eee; padding-top: 1.5rem; display: none; }
+        audio { width: 100%; }
+        .status { margin-top: 10px; font-size: 13px; color: #888; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Gemini TTS</h1>
-        <textarea id="textInput" placeholder="Yahan apna text likhein...">Hello! I am Gemini 2.0. How can I help you today?</textarea>
+        <h1>Gemini 2.0 TTS</h1>
+        <p>Convert your text to natural AI voice</p>
+        
+        <textarea id="textInput" placeholder="Write something here...">Salam! Main Gemini AI hoon. Main aapki kaise madad kar sakta hoon?</textarea>
         
         <select id="voiceSelect">
             <option value="Aoede">Aoede (Female - Natural)</option>
             <option value="Puck">Puck (Male - Energetic)</option>
-            <option value="Charon">Charon (Male - Deep)</option>
+            <option value="Charon">Charon (Male - Deep Voice)</option>
             <option value="Kore">Kore (Female - Soft)</option>
             <option value="Fenrir">Fenrir (Male - Strong)</option>
         </select>
 
         <button id="generateBtn">Generate Voice</button>
         <div id="status" class="status"></div>
-        <audio id="audioPlayer" controls style="display:none;"></audio>
+
+        <div id="audioSection" class="audio-section">
+            <audio id="audioPlayer" controls></audio>
+            <p style="margin-top:10px;">Audio is ready!</p>
+        </div>
     </div>
 
     <script>
         const btn = document.getElementById('generateBtn');
         const textInput = document.getElementById('textInput');
         const voiceSelect = document.getElementById('voiceSelect');
+        const audioSection = document.getElementById('audioSection');
         const audioPlayer = document.getElementById('audioPlayer');
         const status = document.getElementById('status');
 
         btn.onclick = async () => {
             const text = textInput.value.trim();
-            if (!text) return alert("Please enter some text");
+            if (!text) return alert("Please enter text");
 
             btn.disabled = true;
-            status.innerText = "Generating audio... Please wait.";
-            audioPlayer.style.display = "none";
+            status.innerText = "Processing with Gemini 2.0...";
+            audioSection.style.display = "none";
 
             try {
                 const response = await fetch('/tts', {
@@ -72,16 +82,17 @@ HTML_UI = """
                     body: JSON.stringify({ text: text, voice: voiceSelect.value })
                 });
 
-                if (!response.ok) throw new Error("API Error");
+                if (!response.ok) throw new Error("API Limit reached or Error");
 
                 const blob = await response.blob();
                 const url = URL.createObjectURL(blob);
                 audioPlayer.src = url;
-                audioPlayer.style.display = "block";
+                audioSection.style.display = "block";
                 audioPlayer.play();
-                status.innerText = "Done!";
+                status.innerText = "";
             } catch (err) {
                 status.innerText = "Error: " + err.message;
+                alert("Error: Check your API Key or Network");
             } finally {
                 btn.disabled = false;
             }
@@ -102,18 +113,18 @@ def pcm_to_wav(pcm_data, sample_rate=24000, channels=1, sample_width=2):
 
 @app.route('/')
 def index():
-    # Ab browser mein UI dikhega JSON ki jagah
+    # Browser mein ab khoobsurat UI dikhega
     return render_template_string(HTML_UI)
 
 @app.route('/tts', methods=['POST'])
 def tts():
     if not API_KEY:
-        return jsonify({"error": "GEMINI_API_KEY missing"}), 500
+        return jsonify({"error": "GEMINI_API_KEY environment variable is missing"}), 500
     
     try:
         client = genai.Client(api_key=API_KEY)
         data = request.json
-        text = data.get('text', '')
+        text = data.get('text', 'Hello.')
         voice = data.get('voice', 'Aoede') 
 
         response = client.models.generate_content(
@@ -134,7 +145,7 @@ def tts():
                 audio_wav = pcm_to_wav(part.inline_data.data)
                 return Response(audio_wav, mimetype='audio/wav')
         
-        return jsonify({"error": "No audio"}), 400
+        return jsonify({"error": "No audio content generated"}), 400
             
     except Exception as e:
         return jsonify({"error": str(e)}), 500
