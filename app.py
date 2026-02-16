@@ -20,32 +20,23 @@ if not HF_TOKEN:
 
 logger.info(f"✅ HUGGING_FACE_TOKEN loaded: {HF_TOKEN[:5]}...{HF_TOKEN[-5:] if len(HF_TOKEN) > 10 else ''}")
 
-# ✅ 100% WORKING TTS MODELS ON HUGGING FACE (Tested)
-TTS_MODELS = {
-    'english-female': 'espnet/kan-bayashi_ljspeech_vits',        # Working - Female English
-    'english-male': 'espnet/kan-bayashi_ljspeech_fastspeech2',    # Working - Male English
-    'tacotron2': 'espnet/kan-bayashi_ljspeech_tacotron2',         # Working - Tacotron2
-    'hindi': 'ai4bharat/indic-tts-coqui-indo-english-hindi',      # Working - Hindi
-    'bengali': 'ai4bharat/indic-tts-coqui-indo-english-bengali',  # Working - Bengali
-    'tamil': 'ai4bharat/indic-tts-coqui-indo-english-tamil',      # Working - Tamil
-    'telugu': 'ai4bharat/indic-tts-coqui-indo-english-telugu',    # Working - Telugu
-    'gujarati': 'ai4bharat/indic-tts-coqui-indo-english-gujarati', # Working - Gujarati
-    'malayalam': 'ai4bharat/indic-tts-coqui-indo-english-malayalam', # Working - Malayalam
-    'kannada': 'ai4bharat/indic-tts-coqui-indo-english-kannada',  # Working - Kannada
-    'marathi': 'ai4bharat/indic-tts-coqui-indo-english-marathi',  # Working - Marathi
-    'punjabi': 'ai4bharat/indic-tts-coqui-indo-english-punjabi',  # Working - Punjabi
-    'urdu': 'facebook/mms-tts-urd',                               # May work - Urdu
+# ✅ NEW MODELS - Recently Updated (from your screenshot)
+NEW_TTS_MODELS = {
+    'moss-tts': 'OpenMOSS-Team/MOSS-TTS',                    # 8B model - High quality
+    'soulx-singer': 'Soul-AILab/SoulX-Singer',                # Singer model
+    'kugelaudio': 'kugelaudio/kugelaudio-0-open',            # Open audio model
+    'qwen3-tts': 'Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice',     # 1.7B model
+    'kani-tts': 'nininenixi/kani-tts-2-en',                  # 0.4B - Fast
 }
 
-# Backup models (if above fail)
+# Backup models (just in case)
 BACKUP_MODELS = {
-    'bark': 'suno/bark',                                          # Working - Expressive
-    'speecht5': 'microsoft/speecht5_tts',                         # Working - Research
-    'fastpitch': 'nvidia/tts_fastpitch',                          # Working - Fast
+    'bark': 'suno/bark',
+    'bark-small': 'suno/bark-small',
 }
 
 # Combine all models
-ALL_MODELS = {**TTS_MODELS, **BACKUP_MODELS}
+ALL_MODELS = {**NEW_TTS_MODELS, **BACKUP_MODELS}
 
 def handle_errors(f):
     """Decorator to handle errors gracefully"""
@@ -61,14 +52,14 @@ def handle_errors(f):
             }), 500
     return decorated_function
 
-# HTML Template with Working Models
+# HTML Template
 HTML_TEMPLATE = '''
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🎤 TTS Studio - Working Models</title>
+    <title>🎤 New TTS Models - Feb 2025</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
         body {
@@ -84,7 +75,7 @@ HTML_TEMPLATE = '''
             border-radius: 20px;
             box-shadow: 0 20px 60px rgba(0,0,0,0.3);
             width: 100%;
-            max-width: 700px;
+            max-width: 800px;
             padding: 40px;
             animation: slideUp 0.5s ease;
         }
@@ -111,6 +102,15 @@ HTML_TEMPLATE = '''
             font-size: 1.1em;
             border-left: 4px solid #667eea;
             padding-left: 15px;
+        }
+        .model-badge {
+            display: inline-block;
+            background: #e0e7ff;
+            color: #4f46e5;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            margin-left: 10px;
         }
         .form-group { margin-bottom: 25px; }
         label {
@@ -149,15 +149,26 @@ HTML_TEMPLATE = '''
         .model-info {
             background: #f0f4ff;
             border-radius: 10px;
-            padding: 10px 15px;
+            padding: 15px;
             margin-top: 10px;
-            font-size: 0.9em;
+            font-size: 0.95em;
             color: #4a5568;
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             gap: 10px;
         }
-        .model-info i { color: #667eea; font-size: 1.2em; }
+        .model-info i { color: #667eea; font-size: 1.2em; margin-top: 2px; }
+        .model-details {
+            line-height: 1.6;
+        }
+        .model-tag {
+            background: #4f46e5;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 15px;
+            font-size: 0.8em;
+            margin-right: 5px;
+        }
         button {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
@@ -238,68 +249,68 @@ HTML_TEMPLATE = '''
             margin-top: 5px;
         }
         .char-counter.warning { color: #dc3545; }
-        .features {
+        .stats {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            grid-template-columns: repeat(3, 1fr);
             gap: 15px;
             margin-top: 30px;
             padding-top: 20px;
             border-top: 2px solid #e0e0e0;
         }
-        .feature {
+        .stat {
             text-align: center;
             padding: 10px;
             background: #f8f9fa;
             border-radius: 10px;
         }
-        .feature i {
+        .stat i {
             font-size: 1.5em;
             color: #667eea;
             margin-bottom: 5px;
             display: block;
         }
-        .feature span { color: #555; font-size: 0.9em; }
-        @media (max-width: 768px) {
-            .container { padding: 25px; }
-            h1 { font-size: 1.8em; }
-            .features { grid-template-columns: 1fr 1fr; }
+        .stat span { color: #555; font-size: 0.9em; }
+        .stat .value {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #4f46e5;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1><span>🎤 TTS Studio</span></h1>
-        <div class="subtitle">100% Working Models - Tested</div>
+        <h1>
+            <span>🎤 TTS Studio</span>
+            <span class="model-badge">Feb 2025 Models</span>
+        </h1>
+        <div class="subtitle">
+            Latest Hugging Face TTS Models - Recently Updated
+        </div>
         
         <div class="form-group">
-            <label>🌐 Select Voice</label>
+            <label>🎯 Select Model</label>
             <select id="modelSelect">
-                <option value="english-female">🇺🇸 English (Female) - VITS (Best Quality)</option>
-                <option value="english-male">🇺🇸 English (Male) - FastSpeech2</option>
-                <option value="tacotron2">🇺🇸 English - Tacotron2</option>
-                <option value="hindi">🇮🇳 Hindi (हिन्दी)</option>
-                <option value="bengali">🇧🇩 Bengali (বাংলা)</option>
-                <option value="tamil">🇱🇰 Tamil (தமிழ்)</option>
-                <option value="telugu">🇮🇳 Telugu (తెలుగు)</option>
-                <option value="gujarati">🇮🇳 Gujarati (ગુજરાતી)</option>
-                <option value="malayalam">🇮🇳 Malayalam (മലയാളം)</option>
-                <option value="kannada">🇮🇳 Kannada (ಕನ್ನಡ)</option>
-                <option value="marathi">🇮🇳 Marathi (मराठी)</option>
-                <option value="punjabi">🇮🇳 Punjabi (ਪੰਜਾਬੀ)</option>
-                <option value="urdu">🇵🇰 Urdu (اردو) - May work</option>
-                <option value="bark">🎭 Bark - Expressive (Best)</option>
-                <option value="speecht5">🤖 SpeechT5 - Research</option>
+                <option value="moss-tts">🌿 MOSS-TTS (8B) - Latest, High Quality</option>
+                <option value="soulx-singer">🎤 SoulX-Singer - Singing Voice</option>
+                <option value="kugelaudio">🎵 KugelAudio-0 - Open Audio</option>
+                <option value="qwen3-tts">🐉 Qwen3-TTS (1.7B) - Custom Voice</option>
+                <option value="kani-tts">🔊 Kani-TTS-2 (0.4B) - Fast</option>
+                <option value="bark">🎭 Bark - Backup Model</option>
             </select>
-            <div class="model-info">
+            
+            <div class="model-info" id="modelInfo">
                 <i>ℹ️</i>
-                <span id="modelDescription">ESPnet VITS - High quality English voice</span>
+                <div class="model-details" id="modelDescription">
+                    <strong>OpenMOSS-Team/MOSS-TTS</strong> - 8B parameter model<br>
+                    Updated 3 days ago • 196 discussions • 9.6k runs
+                </div>
             </div>
         </div>
         
         <div class="form-group">
-            <label>📝 Enter your text</label>
-            <textarea id="textInput" placeholder="Type text here... (max 500 chars)">Assalam-o-Alaikum! Yeh meri website hai.</textarea>
-            <div class="char-counter" id="charCounter">0/500 characters</div>
+            <label>📝 Enter Text</label>
+            <textarea id="textInput" placeholder="Type text here... (max 500 chars)">Assalam-o-Alaikum! Yeh latest TTS models ka test hai.</textarea>
+            <div class="char-counter" id="charCounter">0/500</div>
         </div>
         
         <button onclick="generateSpeech()" id="generateBtn">
@@ -309,21 +320,33 @@ HTML_TEMPLATE = '''
         <div class="loader" id="loader">
             <div class="spinner"></div>
             <p>Generating... (20-30 sec for first time)</p>
+            <small style="color: #888;">Model loading may take time</small>
         </div>
         
         <div class="audio-container" id="audioContainer">
             <div class="audio-header">
-                <h3>🎧 Audio</h3>
+                <h3>🎧 Generated Audio</h3>
                 <a href="#" class="download-btn" id="downloadBtn" download="speech.wav">⬇️ Download</a>
             </div>
             <audio id="audioPlayer" controls></audio>
         </div>
         
-        <div class="features">
-            <div class="feature"><i>🚀</i><span>Fast</span></div>
-            <div class="feature"><i>🌍</i><span>14 Languages</span></div>
-            <div class="feature"><i>🎯</i><span>High Quality</span></div>
-            <div class="feature"><i>💯</i><span>Free</span></div>
+        <div class="stats">
+            <div class="stat">
+                <i>🆕</i>
+                <span class="value">5</span>
+                <span>New Models</span>
+            </div>
+            <div class="stat">
+                <i>📊</i>
+                <span class="value" id="modelStats">8B</span>
+                <span>Parameters</span>
+            </div>
+            <div class="stat">
+                <i>⚡</i>
+                <span class="value">Free</span>
+                <span>To Use</span>
+            </div>
         </div>
     </div>
 
@@ -332,33 +355,56 @@ HTML_TEMPLATE = '''
         const charCounter = document.getElementById('charCounter');
         const modelSelect = document.getElementById('modelSelect');
         const modelDescription = document.getElementById('modelDescription');
+        const modelStats = document.getElementById('modelStats');
         const generateBtn = document.getElementById('generateBtn');
         const loader = document.getElementById('loader');
         const audioContainer = document.getElementById('audioContainer');
         const audioPlayer = document.getElementById('audioPlayer');
         const downloadBtn = document.getElementById('downloadBtn');
         
-        const modelDescriptions = {
-            'english-female': '🇺🇸 ESPnet VITS - Best quality English female voice',
-            'english-male': '🇺🇸 FastSpeech2 - Fast English male voice',
-            'tacotron2': '🇺🇸 Tacotron2 - Classic TTS model',
-            'hindi': '🇮🇳 AI4Bharat - Hindi voice',
-            'bengali': '🇧🇩 AI4Bharat - Bengali voice',
-            'tamil': '🇱🇰 AI4Bharat - Tamil voice',
-            'telugu': '🇮🇳 AI4Bharat - Telugu voice',
-            'gujarati': '🇮🇳 AI4Bharat - Gujarati voice',
-            'malayalam': '🇮🇳 AI4Bharat - Malayalam voice',
-            'kannada': '🇮🇳 AI4Bharat - Kannada voice',
-            'marathi': '🇮🇳 AI4Bharat - Marathi voice',
-            'punjabi': '🇮🇳 AI4Bharat - Punjabi voice',
-            'urdu': '🇵🇰 MMS Urdu - May need testing',
-            'bark': '🎭 Suno Bark - Most expressive',
-            'speecht5': '🤖 Microsoft SpeechT5'
+        // Model details
+        const modelDetails = {
+            'moss-tts': {
+                name: 'OpenMOSS-Team/MOSS-TTS',
+                desc: '8B parameter model - High quality TTS',
+                stats: '8B',
+                details: 'Updated 3 days ago • 196 discussions • 9.6k runs'
+            },
+            'soulx-singer': {
+                name: 'Soul-AILab/SoulX-Singer',
+                desc: 'Specialized for singing voice',
+                stats: '1B',
+                details: 'Updated 5 days ago • 88 discussions • 691 runs'
+            },
+            'kugelaudio': {
+                name: 'kugelaudio/kugelaudio-0-open',
+                desc: 'Open audio generation model',
+                stats: '1.5B',
+                details: 'Updated 10 days ago • 159 discussions • 38.3k runs'
+            },
+            'qwen3-tts': {
+                name: 'Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice',
+                desc: 'Custom voice capable - 1.7B',
+                stats: '1.7B',
+                details: 'Updated 18 days ago • 956 discussions • 675k runs'
+            },
+            'kani-tts': {
+                name: 'nininenixi/kani-tts-2-en',
+                desc: 'Lightweight fast model - 0.4B',
+                stats: '0.4B',
+                details: 'Updated 2 days ago • 71 discussions • 483 runs'
+            },
+            'bark': {
+                name: 'suno/bark',
+                desc: 'Backup model - Expressive TTS',
+                stats: '1B',
+                details: 'Stable backup model'
+            }
         };
         
         function updateCharCounter() {
             const len = textInput.value.length;
-            charCounter.textContent = `${len}/500 characters`;
+            charCounter.textContent = len + '/500';
             if (len > 450) charCounter.classList.add('warning');
             else charCounter.classList.remove('warning');
         }
@@ -367,7 +413,12 @@ HTML_TEMPLATE = '''
         updateCharCounter();
         
         modelSelect.addEventListener('change', function() {
-            modelDescription.textContent = modelDescriptions[this.value] || 'Select a model';
+            const model = this.value;
+            const details = modelDetails[model];
+            if (details) {
+                modelDescription.innerHTML = `<strong>${details.name}</strong> - ${details.desc}<br><small>${details.details}</small>`;
+                modelStats.textContent = details.stats;
+            }
         });
         
         async function generateSpeech() {
@@ -403,6 +454,7 @@ HTML_TEMPLATE = '''
                 
             } catch (error) {
                 alert('Error: ' + error.message);
+                console.error(error);
             } finally {
                 generateBtn.disabled = false;
                 loader.classList.remove('show');
@@ -415,8 +467,6 @@ HTML_TEMPLATE = '''
                 generateSpeech();
             }
         });
-        
-        modelDescription.textContent = modelDescriptions[modelSelect.value];
     </script>
 </body>
 </html>
@@ -437,7 +487,7 @@ def generate_speech():
         return jsonify({"error": "Please provide text"}), 400
     
     text = data['text']
-    model_key = data.get('model', 'english-female')
+    model_key = data.get('model', 'moss-tts')
     
     if not text:
         return jsonify({"error": "Text cannot be empty"}), 400
@@ -453,10 +503,10 @@ def generate_speech():
     if HF_TOKEN == "MISSING_TOKEN":
         return jsonify({"error": "Hugging Face token not configured"}), 500
     
-    logger.info(f"Generating with {model_id}")
+    logger.info(f"🔊 Generating with model: {model_id}")
     
     try:
-        # Try primary model
+        # Try the selected model first
         response = requests.post(
             f"https://api-inference.huggingface.co/models/{model_id}",
             headers={"Authorization": f"Bearer {HF_TOKEN}"},
@@ -473,41 +523,104 @@ def generate_speech():
             )
         
         elif response.status_code == 503:
+            # Model is loading
             return jsonify({
                 "error": "Model is loading. Please wait 20 seconds and try again.",
                 "status": "loading"
             }), 503
         
         else:
-            # Try backup model
-            backup_key = 'bark' if model_key != 'bark' else 'speecht5'
-            backup_id = BACKUP_MODELS.get(backup_key)
+            # Try backup model (bark) if primary fails
+            logger.info(f"Primary model failed, trying backup...")
+            backup_response = requests.post(
+                "https://api-inference.huggingface.co/models/suno/bark",
+                headers={"Authorization": f"Bearer {HF_TOKEN}"},
+                json={"inputs": text},
+                timeout=60
+            )
             
-            if backup_id:
-                logger.info(f"Trying backup model: {backup_id}")
-                backup_response = requests.post(
-                    f"https://api-inference.huggingface.co/models/{backup_id}",
-                    headers={"Authorization": f"Bearer {HF_TOKEN}"},
-                    json={"inputs": text},
-                    timeout=60
+            if backup_response.status_code == 200:
+                content_type = backup_response.headers.get('Content-Type', 'audio/flac')
+                return Response(
+                    backup_response.content,
+                    mimetype=content_type,
+                    headers={'Access-Control-Allow-Origin': '*'}
                 )
-                
-                if backup_response.status_code == 200:
-                    content_type = backup_response.headers.get('Content-Type', 'audio/flac')
-                    return Response(
-                        backup_response.content,
-                        mimetype=content_type,
-                        headers={'Access-Control-Allow-Origin': '*'}
-                    )
             
             return jsonify({
                 "error": f"API Error: {response.status_code}",
                 "details": response.text[:200]
             }), response.status_code
     
+    except requests.exceptions.Timeout:
+        return jsonify({"error": "Request timeout. Try again."}), 504
     except Exception as e:
         logger.error(f"Error: {str(e)}")
         return jsonify({"error": str(e)}), 500
+
+@app.route('/models')
+@handle_errors
+def list_models():
+    """List all available models"""
+    return jsonify({
+        "new_models": [
+            {
+                "id": "moss-tts",
+                "name": "MOSS-TTS",
+                "hf_id": "OpenMOSS-Team/MOSS-TTS",
+                "size": "8B",
+                "updated": "3 days ago",
+                "runs": "9.6k"
+            },
+            {
+                "id": "soulx-singer",
+                "name": "SoulX-Singer",
+                "hf_id": "Soul-AILab/SoulX-Singer",
+                "size": "~1B",
+                "updated": "5 days ago",
+                "runs": "691"
+            },
+            {
+                "id": "kugelaudio",
+                "name": "KugelAudio-0",
+                "hf_id": "kugelaudio/kugelaudio-0-open",
+                "size": "~1.5B",
+                "updated": "10 days ago",
+                "runs": "38.3k"
+            },
+            {
+                "id": "qwen3-tts",
+                "name": "Qwen3-TTS",
+                "hf_id": "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+                "size": "1.7B",
+                "updated": "18 days ago",
+                "runs": "675k"
+            },
+            {
+                "id": "kani-tts",
+                "name": "Kani-TTS-2",
+                "hf_id": "nininenixi/kani-tts-2-en",
+                "size": "0.4B",
+                "updated": "2 days ago",
+                "runs": "483"
+            }
+        ],
+        "backup_models": [
+            {
+                "id": "bark",
+                "name": "Bark",
+                "hf_id": "suno/bark"
+            }
+        ]
+    })
+
+@app.route('/health')
+def health():
+    return jsonify({
+        "status": "healthy",
+        "models": list(ALL_MODELS.keys()),
+        "token": "✅" if HF_TOKEN != "MISSING_TOKEN" else "❌"
+    })
 
 @app.after_request
 def after_request(response):
@@ -516,18 +629,20 @@ def after_request(response):
     response.headers.add('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
     return response
 
-@app.route('/health')
-def health():
-    return jsonify({"status": "healthy", "token": HF_TOKEN != "MISSING_TOKEN"})
-
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
-    print("="*50)
-    print("🚀 Starting TTS Server with WORKING Models")
-    print("="*50)
-    print(f"✅ Models: {list(TTS_MODELS.keys())}")
-    print(f"✅ Backup: {list(BACKUP_MODELS.keys())}")
-    print(f"🔑 Token: {'✅' if HF_TOKEN != 'MISSING_TOKEN' else '❌'}")
-    print(f"🌐 Port: {port}")
-    print("="*50)
+    print("="*60)
+    print("🚀 Starting TTS Server with NEW Models (Feb 2025)")
+    print("="*60)
+    print("📝 New Models Available:")
+    for key, value in NEW_TTS_MODELS.items():
+        print(f"   • {key}: {value}")
+    print("\n📝 Backup Models:")
+    for key, value in BACKUP_MODELS.items():
+        print(f"   • {key}: {value}")
+    print("-"*60)
+    print(f"🔑 Token Status: {'✅ Configured' if HF_TOKEN != 'MISSING_TOKEN' else '❌ MISSING'}")
+    print(f"🌐 Server Port: {port}")
+    print("="*60)
+    
     app.run(host='0.0.0.0', port=port, debug=True)
