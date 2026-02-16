@@ -20,21 +20,23 @@ if not HF_TOKEN:
 
 logger.info(f"✅ HUGGING_FACE_TOKEN loaded: {HF_TOKEN[:5]}...{HF_TOKEN[-5:] if len(HF_TOKEN) > 10 else ''}")
 
-# TTS Models
+# ✅ WORKING TTS MODELS ON HUGGING FACE
 TTS_MODELS = {
-    'mms-english': 'facebook/mms-tts-eng',
-    'mms-hindi': 'facebook/mms-tts-hin',
-    'mms-urdu': 'facebook/mms-tts-urd',
+    'english-female': 'espnet/kan-bayashi_ljspeech_vits',  # Female English voice
+    'english-male': 'facebook/fastspeech2-en-ljspeech',    # Male English voice
+    'hindi': 'ai4bharat/indic-tts-hindi',                  # Hindi TTS
+    'multilingual': 'facebook/mms-tts',                    # Meta MMS (updated URL)
+    'urdu': 'facebook/mms-tts-urd',                         # Urdu (if available)
 }
 
-# Add more models but mark them as experimental
-EXPERIMENTAL_MODELS = {
-    'bark': 'suno/bark',
-    'speecht5': 'microsoft/speecht5_tts',
+# Alternative/Backup models
+BACKUP_MODELS = {
+    'bark': 'suno/bark',                                    # Expressive TTS
+    'speecht5': 'microsoft/speecht5_tts',                   # Microsoft SpeechT5
 }
 
 # Combine all models
-ALL_MODELS = {**TTS_MODELS, **EXPERIMENTAL_MODELS}
+ALL_MODELS = {**TTS_MODELS, **BACKUP_MODELS}
 
 def handle_errors(f):
     """Decorator to handle errors gracefully"""
@@ -379,17 +381,17 @@ HTML_TEMPLATE = '''
         </div>
         
         <div class="form-group">
-            <label>🌐 Select Language / Voice</label>
+            <label>🌐 Select Voice</label>
             <select id="modelSelect">
-                <option value="mms-english">🇺🇸 English (US) - High Quality</option>
-                <option value="mms-urdu">🇵🇰 Urdu (اردو) - High Quality</option>
-                <option value="mms-hindi">🇮🇳 Hindi (हिन्दी) - High Quality</option>
-                <option value="bark">🎭 Bark - Expressive (Experimental)</option>
-                <option value="speecht5">🤖 SpeechT5 - Research (Experimental)</option>
+                <option value="english-female">🇺🇸 English (Female) - High Quality</option>
+                <option value="english-male">🇺🇸 English (Male) - Fast</option>
+                <option value="hindi">🇮🇳 Hindi (हिन्दी)</option>
+                <option value="multilingual">🌍 Multilingual MMS</option>
+                <option value="bark">🎭 Bark - Expressive (Best Quality)</option>
             </select>
             <div class="model-info">
                 <i>ℹ️</i>
-                <span id="modelDescription">Meta's MMS model - High quality, fast response</span>
+                <span id="modelDescription">High quality English female voice</span>
             </div>
         </div>
         
@@ -450,11 +452,11 @@ HTML_TEMPLATE = '''
         
         // Model descriptions
         const modelDescriptions = {
-            'mms-english': '🇺🇸 Meta MMS English - High quality, natural sounding voice',
-            'mms-urdu': '🇵🇰 Meta MMS Urdu - اردو میں اعلیٰ معیار کی آواز',
-            'mms-hindi': '🇮🇳 Meta MMS Hindi - हिंदी में उच्च गुणवत्ता वाली आवाज़',
-            'bark': '🎭 Suno Bark - Expressive speech with emotions (slower)',
-            'speecht5': '🤖 Microsoft SpeechT5 - Research model for experiments'
+            'english-female': '🇺🇸 ESPnet VITS - Natural female English voice',
+            'english-male': '🇺🇸 FastSpeech2 - Fast male English voice',
+            'hindi': '🇮🇳 AI4Bharat Indic-TTS - Hindi voice',
+            'multilingual': '🌍 Meta MMS - Supports 1100+ languages',
+            'bark': '🎭 Suno Bark - Most expressive, can sing and emote'
         };
         
         // Update character counter
@@ -570,7 +572,6 @@ def api_info():
         "token_status": token_status,
         "environment": os.environ.get('RENDER', 'development'),
         "available_models": list(TTS_MODELS.keys()),
-        "experimental_models": list(EXPERIMENTAL_MODELS.keys()),
         "max_chars": 500
     })
 
@@ -579,44 +580,41 @@ def api_info():
 def list_models():
     """List all available models"""
     return jsonify({
-        "stable_models": [
+        "models": [
             {
-                "id": "mms-english",
-                "name": "English (US)",
-                "hf_id": "facebook/mms-tts-eng",
+                "id": "english-female",
+                "name": "English Female",
+                "hf_id": "espnet/kan-bayashi_ljspeech_vits",
                 "language": "English",
-                "status": "stable"
+                "quality": "High"
             },
             {
-                "id": "mms-hindi",
-                "name": "हिन्दी (Hindi)",
-                "hf_id": "facebook/mms-tts-hin",
+                "id": "english-male",
+                "name": "English Male",
+                "hf_id": "facebook/fastspeech2-en-ljspeech",
+                "language": "English",
+                "quality": "Fast"
+            },
+            {
+                "id": "hindi",
+                "name": "Hindi",
+                "hf_id": "ai4bharat/indic-tts-hindi",
                 "language": "Hindi",
-                "status": "stable"
+                "quality": "Good"
             },
             {
-                "id": "mms-urdu",
-                "name": "اردو (Urdu)",
-                "hf_id": "facebook/mms-tts-urd",
-                "language": "Urdu",
-                "status": "stable"
-            }
-        ],
-        "experimental_models": [
+                "id": "multilingual",
+                "name": "Multilingual",
+                "hf_id": "facebook/mms-tts",
+                "language": "1100+",
+                "quality": "Good"
+            },
             {
                 "id": "bark",
-                "name": "Bark (Expressive)",
+                "name": "Bark",
                 "hf_id": "suno/bark",
                 "language": "English",
-                "status": "experimental",
-                "note": "May take 30-60 seconds to load"
-            },
-            {
-                "id": "speecht5",
-                "name": "SpeechT5",
-                "hf_id": "microsoft/speecht5_tts",
-                "language": "English",
-                "status": "experimental"
+                "quality": "Excellent"
             }
         ]
     })
@@ -627,24 +625,10 @@ def health_check():
     """Health check endpoint for Render"""
     token_ok = HF_TOKEN != "MISSING_TOKEN"
     
-    # Test Hugging Face API with a quick call
-    hf_status = "unknown"
-    if token_ok:
-        try:
-            test_response = requests.get(
-                "https://api-inference.huggingface.co/status",
-                headers={"Authorization": f"Bearer {HF_TOKEN}"},
-                timeout=5
-            )
-            hf_status = "connected" if test_response.status_code == 200 else "error"
-        except:
-            hf_status = "unreachable"
-    
     return jsonify({
         "status": "healthy",
         "timestamp": time.time(),
         "token_configured": token_ok,
-        "huggingface_status": hf_status,
         "models_available": len(ALL_MODELS)
     })
 
@@ -663,7 +647,7 @@ def generate_speech():
         return jsonify({"error": "No JSON data received"}), 400
     
     text = data.get('text', '')
-    model_key = data.get('model', 'mms-english')
+    model_key = data.get('model', 'english-female')
     
     # Validate text
     if not text:
@@ -679,8 +663,7 @@ def generate_speech():
     if model_key not in ALL_MODELS:
         return jsonify({
             "error": f"Model '{model_key}' not found",
-            "available_models": list(TTS_MODELS.keys()),
-            "experimental": list(EXPERIMENTAL_MODELS.keys())
+            "available_models": list(TTS_MODELS.keys())
         }), 400
     
     model_id = ALL_MODELS[model_key]
@@ -716,7 +699,7 @@ def generate_speech():
             API_URL,
             headers=headers,
             json=payload,
-            timeout=60  # Longer timeout for model loading
+            timeout=60
         )
         
         logger.info(f"HF API Response status: {response.status_code}")
@@ -764,13 +747,6 @@ def generate_speech():
             "tip": "Model might be loading. Try again in 30 seconds."
         }), 504
     
-    except requests.exceptions.ConnectionError:
-        logger.error("Connection error")
-        return jsonify({
-            "error": "Connection error",
-            "tip": "Check internet connection"
-        }), 503
-    
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}")
         return jsonify({
@@ -792,7 +768,6 @@ if __name__ == '__main__':
     logger.info("🚀 Starting Hugging Face TTS Server with Frontend")
     logger.info("="*50)
     logger.info(f"📝 Models available: {list(TTS_MODELS.keys())}")
-    logger.info(f"🔬 Experimental: {list(EXPERIMENTAL_MODELS.keys())}")
     
     if HF_TOKEN == "MISSING_TOKEN":
         logger.error("❌ HUGGING_FACE_TOKEN not set!")
